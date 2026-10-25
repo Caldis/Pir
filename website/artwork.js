@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 // One canvas supplies the page's ambient light; the product demo remains ordinary HTML.
 export function createAmbientArtwork() {
   const panel = document.querySelector('.ambient-art');
@@ -89,7 +90,7 @@ export function createAmbientArtwork() {
     panel.classList.toggle('static-art', staticMode);
     button.disabled = staticMode;
     button.setAttribute('aria-pressed', String(paused));
-    button.setAttribute('aria-label', staticMode ? '静态背景' : paused ? '播放动态效果' : '暂停动态效果');
+    button.setAttribute('aria-label', t(staticMode ? 'motion.static' : paused ? 'motion.play' : 'motion.pause'));
     button.innerHTML = paused
       ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 3 7 5-7 5Z"/></svg>'
       : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg>';
@@ -104,6 +105,7 @@ export function createAmbientArtwork() {
   const size = new ResizeObserver(resize);
   size.observe(panel);
   document.addEventListener('visibilitychange', update);
+  document.addEventListener('pir-languagechange', update);
   motion.addEventListener('change', update);
   connection?.addEventListener('change', update);
   button.addEventListener('click', () => { paused = !paused; update(); });

@@ -1,5 +1,5 @@
 #!/bin/bash
 set -euo pipefail
-PUV_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PUV_CONFIGURATION=debug "$PUV_ROOT/scripts/build.sh"
-open "$PUV_ROOT/dist/Puv.app"
+PIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PIR_CONFIGURATION=debug "$PIR_ROOT/scripts/build.sh"
+open "$PIR_ROOT/dist/Pir.app"

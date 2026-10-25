@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-PUV_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PUV_APP="${1:?Usage: embed-sparkle.sh /path/to/Puv.app}"
-PUV_FRAMEWORK="$(python3 - "$PUV_ROOT" <<'PY'
+PIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PIR_APP="${1:?Usage: embed-sparkle.sh /path/to/Pir.app}"
+PIR_FRAMEWORK="$(python3 - "$PIR_ROOT" <<'PY'
 import pathlib, subprocess, sys
 root = pathlib.Path(sys.argv[1]) / '.build/artifacts'
 for framework in sorted(root.rglob('Sparkle.framework')):
@@ -17,8 +17,8 @@ else:
     raise SystemExit('Sparkle Universal framework is missing; run scripts/swift.sh build first')
 PY
 )"
-[[ -f "$PUV_APP/Contents/Info.plist" ]] || { printf '%s\n' 'Puv app bundle is required' >&2; exit 1; }
-mkdir -p "$PUV_APP/Contents/Frameworks"
-rm -rf "$PUV_APP/Contents/Frameworks/Sparkle.framework"
-ditto "$PUV_FRAMEWORK" "$PUV_APP/Contents/Frameworks/Sparkle.framework"
-"$PUV_ROOT/scripts/sign-update-components.sh" "$PUV_APP" -
+[[ -f "$PIR_APP/Contents/Info.plist" ]] || { printf '%s\n' 'Pir app bundle is required' >&2; exit 1; }
+mkdir -p "$PIR_APP/Contents/Frameworks"
+rm -rf "$PIR_APP/Contents/Frameworks/Sparkle.framework"
+ditto "$PIR_FRAMEWORK" "$PIR_APP/Contents/Frameworks/Sparkle.framework"
+"$PIR_ROOT/scripts/sign-update-components.sh" "$PIR_APP" -

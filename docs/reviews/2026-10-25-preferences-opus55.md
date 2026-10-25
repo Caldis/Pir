@@ -1,10 +1,10 @@
 # 偏好设置布局审查
 
-读者: Puv 维护者与后续 agent
+读者: Pir 维护者与后续 agent
 
 审查工具为 Claude Code 2.1.310, 指定模型 claude-opus-5-5, 返回记录中的 canonicalModel 同为 claude-opus-5-5
 
-成功完成的外部审查输入为用户提供的 Puv / Mos 对照截图. 源码与运行时复核在本地执行, 以下结论区分模型意见与已验证事实
+成功完成的外部审查输入为用户提供的 Pir / Mos 对照截图. 源码与运行时复核在本地执行, 以下结论区分模型意见与已验证事实
 
 本文按轮次保留审查快照, 当前状态以末尾「四页版本最终验收」为准
 
@@ -25,7 +25,7 @@
 
 以下文字保留模型原始输出, 其中误判以复核表为准
 
-> 1. **复选框应替换为拨动开关**：Puv 用方形 NSButton 复选框，Mos 及 macOS 13+ 系统偏好均用圆形拨动开关（NSSwitch）。将两处复选框改为 Toggle 控件，视觉语言与系统一致。
+> 1. **复选框应替换为拨动开关**：Pir 用方形 NSButton 复选框，Mos 及 macOS 13+ 系统偏好均用圆形拨动开关（NSSwitch）。将两处复选框改为 Toggle 控件，视觉语言与系统一致。
 >
 > 2. **热键键帽未独立分离**：修饰键 ⇧⌘ 与主键 9 共用同一大胶囊，"+"浮于中间，不符合键帽惯例。改为每个键符号渲染为独立小键帽并紧密排列，去掉"+"分隔符。
 >
@@ -41,13 +41,13 @@
 
 实际窗口复核覆盖基础、贴图、关于页切换, 热键录制入口与 Escape 取消, 原有快捷键保持不变
 
-本次修改保留在工作区, 本地预览位于 /tmp/puv-layout-preview/Puv.app, 公开 0.1.0 版本保持原样
+本次修改保留在工作区, 本地预览位于 /tmp/pir-layout-preview/Pir.app, 公开 0.1.0 版本保持原样
 
 ## Mos 样式实现审计
 
-已读取 Mos/Base.lproj/Main.storyboard、偏好控制器 Swift 源码与图标资源. Puv 实现均为 Swift
+已读取 Mos/Base.lproj/Main.storyboard、偏好控制器 Swift 源码与图标资源. Pir 实现均为 Swift
 
-| 范围 | Mos 实际配置 | Puv 实现 |
+| 范围 | Mos 实际配置 | Pir 实现 |
 | --- | --- | --- |
 | 窗口 | 宽 450 pt, titled、closable、透明标题栏 | 同款原生窗口配置 |
 | 页签 | NSTabViewController.toolbar, noTabsNoBorder, wantsLayer | 系统工具栏、系统选中态与两侧 flexibleSpace |
@@ -55,7 +55,7 @@
 | 表单 | 左边距 20 pt, 标签宽 136 pt, 列距 15 pt, 行净距 20 pt | 统一 PreferencesStyle |
 | 控件 | 13 pt 系统字体, 14 pt 复选框, 9 pt 说明字体 | 原生 AppKit 控件 |
 | 热键 | rounded、left、13 pt 字体, 120 × 24 pt 录制按钮, 间距 4 pt, 24 × 24 pt 清除按钮 | 同款原生控件配置, 清除与重新绑定状态持久化 |
-| 关于 | 70 pt ultraLight 应用名, 右侧信息与下方按钮 | Puv 字标、单色动态双面片、版本和链接 |
+| 关于 | 70 pt ultraLight 应用名, 右侧信息与下方按钮 | Pir 字标、单色动态双面片、版本和链接 |
 | 图标 | General 与 About SVG 模板资源 | 同源资源, 系统自动着色 |
 | 切页 | 0.3 秒动画, 保留窗口顶边 | 实测 contentLayoutRect 装饰区高度, 减少动态效果时零时长 |
 
@@ -63,7 +63,7 @@
 
 基础与关于使用 AppKit, 贴图列表使用 SwiftUI. PreferencesStyle 集中维护字体、间距、材质与尺寸. 页面控制器共享 NSVisualEffectView 根视图, 窗口背景按实际装饰区高度延伸至顶部
 
-原 Puv 二进制记录 SDK 13.0, Mos 二进制记录 SDK 26.5. 本机工具链 SDK 为 27.0. SwiftBuild 直接链接路径采用 --sysroot 时, 产物 SDK 记录与部署版本相同. 包装脚本显式传入 Clang 链接驱动的 -isysroot 后, Puv 产物记录 minos 13.0、SDK 27.0, 实际窗口恢复系统圆角描边页签与按钮外观
+原 Pir 二进制记录 SDK 13.0, Mos 二进制记录 SDK 26.5. 本机工具链 SDK 为 27.0. SwiftBuild 直接链接路径采用 --sysroot 时, 产物 SDK 记录与部署版本相同. 包装脚本显式传入 Clang 链接驱动的 -isysroot 后, Pir 产物记录 minos 13.0、SDK 27.0, 实际窗口恢复系统圆角描边页签与按钮外观
 
 关于页 Logo 使用 Core Animation, 减少动态效果、后台与窗口不可见状态停止动画. 官网使用 shaders 4.0.5 的 Swirl、FlutedGlass 与 FilmGrain, 配有静态回退和播放状态管理. GPU 重建后的 onReady 重新应用尺寸与暂停状态, 隔离 renderer 恢复模拟覆盖用户暂停、恢复、减少动态效果与像素预算
 
@@ -79,7 +79,7 @@ scripts/check.sh 本轮通过, 包含 53 项 XCTest、官网生产构建、脚�
 
 ## 四页版本最终验收
 
-当前偏好设置包含基础、贴图、更新与关于四页, 本地产物位于 dist/Puv.app. 热键保留用户当前绑定 ⇧ ⌘ V
+当前偏好设置包含基础、贴图、更新与关于四页, 本地产物位于 dist/Pir.app. 热键保留用户当前绑定 ⇧ ⌘ V
 
 热键录制容器默认 140 × 28 pt, 长组合键按内容延长右侧, 清除按钮为 28 × 28 pt, 间距为 4 pt. 内部 KeyPreview 采用修饰键键帽 + 普通键键帽, 键帽高度 20 pt, 上、下、左内边距均为 4 pt. 原生窗口截图已复核键帽、说明文字与帮助弹层. 后续紧凑比例修正的 15 项相关测试通过
 

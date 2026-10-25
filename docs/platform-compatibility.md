@@ -1,6 +1,6 @@
 # 平台兼容性
 
-读者: Puv 维护者与后续 agent
+读者: Pir 维护者与后续 agent
 
 ## 当前支持
 
@@ -21,11 +21,11 @@ LogoBirth.metal.txt 在运行时编译, 使用应用当前图标纹理生成轮�
 
 窗口遮挡或最小化暂停动画, 再次可见后继续; 减少动态效果开启时直接显示最终静帧
 
-Metal 编译与分阶段渲染使用 LogoBirthTests 验证; 设置 PUV_ARTWORK_SNAPSHOT_DIR 后测试可导出 PNG 帧供视觉验收
+Metal 编译与分阶段渲染使用 LogoBirthTests 验证; 设置 PIR_ARTWORK_SNAPSHOT_DIR 后测试可导出 PNG 帧供视觉验收
 
 ## 快捷键试用
 
-Carbon 注册负责全局快捷键触发, NSEvent local monitor 负责应用窗口内录制. Puv 的当前流程免辅助功能权限
+Carbon 注册负责全局快捷键触发, NSEvent local monitor 负责应用窗口内录制. Pir 的当前流程免辅助功能权限
 
 Vortex 烟花使用透明、点击穿透的 NSPanel, 显示于欢迎窗口所在屏幕, 结束后释放渲染资源. 减少动态效果开启时保留 Logo 贴图并跳过烟花
 

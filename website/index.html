@@ -4,57 +4,57 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080a10">
-  <meta name="description" content="Puv 是一款轻巧的 macOS 贴图工具. 通过一个快捷键, 让剪贴板中的图片与文字悬浮在屏幕上.">
-  <meta property="og:title" content="Puv - 复制一下. 贴在屏幕上.">
+  <meta name="description" content="Pir 是一款轻巧的 macOS 贴图工具. 通过一个快捷键, 让剪贴板中的图片与文字悬浮在屏幕上.">
+  <meta property="og:title" content="Pir - 复制一下. 贴在屏幕上.">
   <meta property="og:description" content="图片与文字, 随手贴在屏幕上. 一款轻巧的 macOS 应用.">
   <meta property="og:type" content="website">
-  <title>Puv - 复制一下. 贴在屏幕上.</title>
+  <title>Pir - 复制一下. 贴在屏幕上.</title>
   <link rel="icon" type="image/png" href="./assets/app-icon.png">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <div class="ambient-art" aria-hidden="true"><div class="ambient-fallback"></div><canvas id="shader-art" width="960" height="660"></canvas></div>
-  <a class="skip-link" href="#main">跳到正文</a>
+  <a class="skip-link" href="#main" data-i18n="skip">跳到正文</a>
   <header class="header wrap">
-    <a class="brand" href="./" aria-label="Puv 首页"><img src="./assets/app-icon.png" width="44" height="44" alt=""><span>Puv</span></a>
-    <nav aria-label="主导航"><a href="#details">功能</a><a href="https://github.com/Caldis/Puv" target="_blank" rel="noreferrer">GitHub <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></a></nav>
+    <a class="brand" href="./" aria-label="Pir 首页" data-i18n-aria-label="home"><img src="./assets/app-icon.png" width="44" height="44" alt=""><span>Pir</span></a>
+    <nav aria-label="主导航" data-i18n-aria-label="nav"><a href="#details" data-i18n="features">功能</a><a href="https://github.com/Caldis/Pir" target="_blank" rel="noreferrer">GitHub <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></a><button id="language-toggle" type="button" aria-label="Switch language">EN</button></nav>
   </header>
   <main id="main">
     <section class="hero wrap" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <h1 id="hero-title">复制一下.<br>贴在屏幕上.</h1>
-        <p class="intro">一张图片, 一段文字.<br>按下快捷键, 悬浮在手边.</p>
+        <h1 id="hero-title" data-i18n="hero">复制一下.<br>贴在屏幕上.</h1>
+        <p class="intro" data-i18n="intro">一张图片, 一段文字.<br>按下快捷键, 悬浮在手边.</p>
         <div class="download-group">
-          <a class="download" href="https://github.com/Caldis/Puv/releases/latest" data-download><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v10m-4-4 4 4 4-4M3 12v5h14v-5"/></svg><span>下载 Puv</span></a>
-          <p class="download-note" data-release-note>macOS 13+ <span>免费 · 源码可用</span></p>
+          <a class="download" href="https://github.com/Caldis/Pir/releases/latest" data-download><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v10m-4-4 4 4 4-4M3 12v5h14v-5"/></svg><span data-i18n="download">下载 Pir</span></a>
+          <p class="download-note" data-release-note>macOS 13+ <span data-i18n="availability">免费 · 源码可用</span></p>
         </div>
       </div>
-      <div class="scene" aria-label="Puv 图片与文字悬浮面板交互演示">
-        <div class="desktop-ghost" aria-hidden="true"><div class="desktop-menubar"><span>◉ &nbsp; Finder</span><span>周五 10:24</span></div><div class="work-window"><div class="work-title"><span class="traffic-lights">● ● ●</span><span>周末出行</span></div><div class="work-body"><span class="work-date">备忘录</span><h3>去山里走走</h3><p>找一个有湖泊的地方<br>沿着山脚慢慢走</p><div class="work-line"></div><p>行程与灵感, 随手记下.</p></div></div><div class="desktop-dock"><i></i><i></i><i></i><i></i></div></div>
-        <div class="float-panel art-panel" data-draggable tabindex="0" role="group" aria-label="图片悬浮面板, 可以拖动或使用方向键移动">
-          <img class="pinned-landscape" src="./assets/alpine-lake.svg" width="640" height="480" alt="粉色晨光下的雪山与蓝绿色湖泊" draggable="false">
-          <button class="panel-close" aria-label="关闭图片演示" data-close="art-panel">×</button>
+      <div class="scene" aria-label="Pir 图片与文字悬浮面板交互演示" data-i18n-aria-label="demo.label">
+        <div class="desktop-ghost" aria-hidden="true"><div class="desktop-menubar"><span>◉ &nbsp; Finder</span><span data-i18n="demo.time">周五 10:24</span></div><div class="work-window"><div class="work-title"><span class="traffic-lights">● ● ●</span><span data-i18n="demo.trip">周末出行</span></div><div class="work-body"><span class="work-date" data-i18n="demo.notes">备忘录</span><h3 data-i18n="demo.heading">去山里走走</h3><p data-i18n="demo.body">找一个有湖泊的地方<br>沿着山脚慢慢走</p><div class="work-line"></div><p data-i18n="demo.thought">行程与灵感, 随手记下.</p></div></div><div class="desktop-dock"><i></i><i></i><i></i><i></i></div></div>
+        <div class="float-panel art-panel" data-draggable tabindex="0" role="group" aria-label="图片悬浮面板, 可以拖动或使用方向键移动" data-i18n-aria-label="demo.image">
+          <img class="pinned-landscape" src="./assets/alpine-lake.svg" width="640" height="480" alt="粉色晨光下的雪山与蓝绿色湖泊" data-i18n-alt="landscape" draggable="false">
+          <button class="panel-close" aria-label="关闭图片演示" data-i18n-aria-label="close.image" data-close="art-panel">×</button>
           <span class="resize-grip" aria-hidden="true"></span>
         </div>
-        <div class="float-panel note-panel" data-draggable tabindex="0" role="group" aria-label="文字悬浮面板, 可以拖动或使用方向键移动">
-          <button class="panel-close" aria-label="关闭文字演示" data-close="note-panel">×</button>
-          <p class="note-heading">周末出行清单</p>
-          <p>徒步鞋、相机、充电器<br>周六 08:30 出发<br><br>记得带一件外套.</p><span class="resize-grip" aria-hidden="true"></span>
+        <div class="float-panel note-panel" data-draggable tabindex="0" role="group" aria-label="文字悬浮面板, 可以拖动或使用方向键移动" data-i18n-aria-label="demo.text">
+          <button class="panel-close" aria-label="关闭文字演示" data-i18n-aria-label="close.text" data-close="note-panel">×</button>
+          <p class="note-heading" data-i18n="demo.checklist">周末出行清单</p>
+          <p data-i18n="demo.list">徒步鞋、相机、充电器<br>周六 08:30 出发<br><br>记得带一件外套.</p><span class="resize-grip" aria-hidden="true"></span>
         </div>
-        <div class="demo-toolbar"><span>拖动图片或文字</span><button id="reset-demo" type="button">重置演示 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6a5.2 5.2 0 1 1 0 4M3 2v4h4"/></svg></button><button class="motion-toggle" id="motion-toggle" type="button" aria-label="暂停动态效果" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg></button></div>
+        <div class="demo-toolbar"><span data-i18n="drag">拖动图片或文字</span><button id="reset-demo" type="button"><span data-i18n="reset">重置演示</span> <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 6a5.2 5.2 0 1 1 0 4M3 2v4h4"/></svg></button><button class="motion-toggle" id="motion-toggle" type="button" aria-label="暂停动态效果" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg></button></div>
       </div>
     </section>
     <section class="details wrap" id="details" aria-labelledby="details-title">
-      <div class="details-heading"><h2 id="details-title">刚好够用.</h2><p>贴出来, 调整大小, 继续手头的事.</p></div>
+      <div class="details-heading"><h2 id="details-title" data-i18n="details.heading">刚好够用.</h2><p data-i18n="details.intro">贴出来, 调整大小, 继续手头的事.</p></div>
       <div class="feature-row">
-        <article><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="4" y="6" width="20" height="16" rx="3"/><circle cx="10" cy="11" r="1.5"/><path d="m6 20 7-7 4 4 3-3 4 4"/></svg><h3>图片与文字</h3><p>自动识别剪贴板内容.<br>文字保留换行, 明暗跟随系统.</p></article>
-        <article><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 12V6h6m8 10v6h-6M7 6l7 7m7 9-7-7"/><rect x="4" y="15" width="7" height="9" rx="1.5"/><rect x="17" y="3" width="7" height="9" rx="1.5"/></svg><h3>自由摆放</h3><p>无边框置顶面板.<br>随手移动, 放大或缩小.</p></article>
-        <article><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="6" width="22" height="16" rx="3"/><path d="M7 10h2m4 0h2m4 0h2M7 14h2m4 0h2m4 0h2M9 18h10"/></svg><h3>一个快捷键</h3><p>随时呼出, 自定义绑定.<br>开机启动与菜单栏图标, 随你设置.</p></article>
+        <article><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="4" y="6" width="20" height="16" rx="3"/><circle cx="10" cy="11" r="1.5"/><path d="m6 20 7-7 4 4 3-3 4 4"/></svg><h3 data-i18n="content.heading">图片与文字</h3><p data-i18n="content.body">自动识别剪贴板内容.<br>文字保留换行, 明暗跟随系统.</p></article>
+        <article><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M7 12V6h6m8 10v6h-6M7 6l7 7m7 9-7-7"/><rect x="4" y="15" width="7" height="9" rx="1.5"/><rect x="17" y="3" width="7" height="9" rx="1.5"/></svg><h3 data-i18n="placement.heading">自由摆放</h3><p data-i18n="placement.body">无边框置顶面板.<br>随手移动, 放大或缩小.</p></article>
+        <article><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="6" width="22" height="16" rx="3"/><path d="M7 10h2m4 0h2m4 0h2M7 14h2m4 0h2m4 0h2M9 18h10"/></svg><h3 data-i18n="shortcut.heading">一个快捷键</h3><p data-i18n="shortcut.body">随时呼出, 自定义绑定.<br>开机启动与菜单栏图标, 随你设置.</p></article>
       </div>
     </section>
-    <section class="closing wrap" aria-label="下载 Puv"><img src="./assets/app-icon.png" alt="Puv 应用图标" width="96" height="96" loading="lazy"><div><h2>随手一贴.</h2><p>给剪贴板里的内容, 一个位置.</p></div><a class="download compact" href="https://github.com/Caldis/Puv/releases/latest" data-download>下载 Puv <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v10m-4-4 4 4 4-4M3 12v5h14v-5"/></svg></a></section>
+    <section class="closing wrap" aria-label="下载 Pir" data-i18n-aria-label="download"><img src="./assets/app-icon.png" alt="Pir 应用图标" data-i18n-alt="icon" width="96" height="96" loading="lazy"><div><h2 data-i18n="closing.heading">随手一贴.</h2><p data-i18n="closing.body">给剪贴板里的内容, 一个位置.</p></div><a class="download compact" href="https://github.com/Caldis/Pir/releases/latest" data-download><span data-i18n="download">下载 Pir</span> <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v10m-4-4 4 4 4-4M3 12v5h14v-5"/></svg></a></section>
   </main>
-  <footer class="footer wrap"><span>Puv <span class="footer-author">by Caldis</span></span><div><a href="https://github.com/Caldis/Puv">源代码</a><a href="https://github.com/Caldis/Puv/releases">版本记录</a><a href="https://github.com/Caldis/Puv/issues">反馈</a><a href="https://github.com/Caldis/Puv/blob/main/LICENSE">许可</a></div></footer>
+  <footer class="footer wrap"><span>Pir <span class="footer-author">by Caldis</span></span><div><a href="https://github.com/Caldis/Pir" data-i18n="source">源代码</a><a href="https://github.com/Caldis/Pir/releases" data-i18n="releases">版本记录</a><a href="https://github.com/Caldis/Pir/issues" data-i18n="feedback">反馈</a><a href="https://github.com/Caldis/Pir/blob/main/LICENSE" data-i18n="license">许可</a></div></footer>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

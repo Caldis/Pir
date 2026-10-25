@@ -22,7 +22,7 @@ def release_metadata(version, build, channel='stable'):
     suffix = '' if channel == 'stable' else '-beta'
     tag = version if channel == 'stable' else f'{version}-beta-{build}'
     return {'version': version, 'build': build, 'channel': channel, 'tag': tag,
-            'archive': f'Puv.Versions.{version}{suffix}-{build}.zip'}
+            'archive': f'Pir.Versions.{version}{suffix}-{build}.zip'}
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
-# Puv 官网
+# Pir 官网
 
-面向 Puv 用户的产品与下载页面, 静态产物部署在 GitHub Pages
+面向 Pir 用户的产品与下载页面, 静态产物部署在 GitHub Pages
 
 ## 本地开发
 

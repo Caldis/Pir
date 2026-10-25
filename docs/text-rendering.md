@@ -16,11 +16,11 @@
 
 ## 设计决策
 
-[Apple 的 TextKit 更新说明](https://developer.apple.com/videos/play/wwdc2022/10090/)确认 TextKit 2 采用视口布局, 适用于大文档, macOS Ventura 的 TextEdit 同样使用该引擎. 显式访问 NSTextView 的 `layoutManager` 会触发 TextKit 1 兼容模式, Puv 使用 `textLayoutManager` 路径
+[Apple 的 TextKit 更新说明](https://developer.apple.com/videos/play/wwdc2022/10090/)确认 TextKit 2 采用视口布局, 适用于大文档, macOS Ventura 的 TextEdit 同样使用该引擎. 显式访问 NSTextView 的 `layoutManager` 会触发 TextKit 1 兼容模式, Pir 使用 `textLayoutManager` 路径
 
 [Apple 的 TextKit 2 介绍](https://developer.apple.com/videos/play/wwdc2021/10061/)建议布局工作集中在可见视口, 全文布局请求可能带来显著开销
 
-实际参考的成熟实现为 [STTextView](https://github.com/krzyzanowskim/STTextView). 其[视口布局实现](https://github.com/krzyzanowskim/STTextView/blob/c7d519318b06ebb7a99a641e4aa8831105d3b7d4/Sources/STTextViewAppKit/STTextView%2BNSTextViewportLayoutControllerDelegate.swift)围绕可见区域预取、复用片段视图并回收离屏片段. Puv 的只读纯文本范围适合系统 NSTextView, 视口管理交给 AppKit, 系统基线保持 macOS 13
+实际参考的成熟实现为 [STTextView](https://github.com/krzyzanowskim/STTextView). 其[视口布局实现](https://github.com/krzyzanowskim/STTextView/blob/c7d519318b06ebb7a99a641e4aa8831105d3b7d4/Sources/STTextViewAppKit/STTextView%2BNSTextViewportLayoutControllerDelegate.swift)围绕可见区域预取、复用片段视图并回收离屏片段. Pir 的只读纯文本范围适合系统 NSTextView, 视口管理交给 AppKit, 系统基线保持 macOS 13
 
 ## 实测
 
@@ -35,4 +35,4 @@
 
 性能测量覆盖重复调整尺寸后的布局与显示请求, 初次创建与 GPU 最终合成耗时属于测量范围之外. macOS 13 与 14 的性能表现仍需对应系统实测
 
-回归入口为 `Tests/PuvUITests/PinPanelTests.swift` 与 `Tests/PuvCoreTests/CoreTests.swift`
+回归入口为 `Tests/PirUITests/PinPanelTests.swift` 与 `Tests/PirCoreTests/CoreTests.swift`

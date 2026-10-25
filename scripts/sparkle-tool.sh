@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-PUV_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PUV_TOOL="${1:?Usage: sparkle-tool.sh tool [arguments]}"
+PIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PIR_TOOL="${1:?Usage: sparkle-tool.sh tool [arguments]}"
 shift
-PUV_EXECUTABLE="$(python3 - "$PUV_ROOT" "$PUV_TOOL" "${PUV_SPARKLE_TOOLS:-}" <<'PY'
+PIR_EXECUTABLE="$(python3 - "$PIR_ROOT" "$PIR_TOOL" "${PIR_SPARKLE_TOOLS:-}" <<'PY'
 import os, pathlib, sys
 root, tool, override = sys.argv[1:]
 if tool not in {'generate_keys', 'sign_update', 'generate_appcast'}:
@@ -15,7 +15,7 @@ for path in candidates:
         print(path)
         break
 else:
-    raise SystemExit('Sparkle tools are missing; run scripts/swift.sh build or set PUV_SPARKLE_TOOLS to the official distribution bin directory')
+    raise SystemExit('Sparkle tools are missing; run scripts/swift.sh build or set PIR_SPARKLE_TOOLS to the official distribution bin directory')
 PY
 )"
-exec "$PUV_EXECUTABLE" "$@"
+exec "$PIR_EXECUTABLE" "$@"

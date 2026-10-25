@@ -22,13 +22,13 @@ def field(name):
 
 def metadata(app, channel, public_key, source):
     info = plistlib.loads((pathlib.Path(app) / 'Contents/Info.plist').read_bytes())
-    if info.get('CFBundleIdentifier') != 'me.caldis.puv':
-        raise ValueError('Release app must be Puv')
+    if info.get('CFBundleIdentifier') != 'me.caldis.pir':
+        raise ValueError('Release app must be Pir')
     version, build = info.get('CFBundleShortVersionString', ''), info.get('CFBundleVersion', '')
     names = release_metadata(version, build, channel)
     order = build_order(build)
     if len(base64.b64decode(public_key, validate=True)) != 32 or info.get('SUPublicEDKey') != public_key:
-        raise ValueError('App public key must match the Puv Keychain signing account')
+        raise ValueError('App public key must match the Pir Keychain signing account')
     feed = ET.parse(source)
     previous = []
     for item in feed.findall('./channel/item'):
@@ -49,7 +49,7 @@ def prepare(app, channel, public_key, source, archive, signature, notes, output)
     if archive.name != filename or len(base64.b64decode(signature, validate=True)) != 64:
         raise ValueError('Update archive name or EdDSA signature is invalid')
     item = ET.Element('item')
-    ET.SubElement(item, 'title').text = 'Puv ' + info['CFBundleShortVersionString']
+    ET.SubElement(item, 'title').text = 'Pir ' + info['CFBundleShortVersionString']
     ET.SubElement(item, field('version')).text = info['CFBundleVersion']
     ET.SubElement(item, field('shortVersionString')).text = info['CFBundleShortVersionString']
     ET.SubElement(item, field('minimumSystemVersion')).text = info.get('LSMinimumSystemVersion', '13.0')
@@ -57,7 +57,7 @@ def prepare(app, channel, public_key, source, archive, signature, notes, output)
         ET.SubElement(item, field('channel')).text = 'beta'
     ET.SubElement(item, 'pubDate').text = email.utils.format_datetime(datetime.datetime.now(datetime.timezone.utc))
     ET.SubElement(item, 'description').text = pathlib.Path(notes).read_text(encoding='utf-8')
-    location = f'https://github.com/Caldis/Puv/releases/download/{urllib.parse.quote(tag, safe="")}/{urllib.parse.quote(filename, safe="")}'
+    location = f'https://github.com/Caldis/Pir/releases/download/{urllib.parse.quote(tag, safe="")}/{urllib.parse.quote(filename, safe="")}'
     ET.SubElement(item, 'enclosure', {'url': location, 'length': str(archive.stat().st_size),
                                    'type': 'application/octet-stream', field('edSignature'): signature})
     root = feed.find('channel')
@@ -67,7 +67,7 @@ def prepare(app, channel, public_key, source, archive, signature, notes, output)
     root.insert(first_item, item)
     ET.indent(feed, space='  ')
     feed.write(output, encoding='utf-8', xml_declaration=True)
-    print(f'Prepared Puv {info["CFBundleShortVersionString"]} · {info["CFBundleVersion"]}, tag {tag}')
+    print(f'Prepared Pir {info["CFBundleShortVersionString"]} · {info["CFBundleVersion"]}, tag {tag}')
 
 
 if __name__ == '__main__':

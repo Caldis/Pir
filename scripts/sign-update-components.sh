@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-PUV_APP="${1:?Usage: sign-update-components.sh /path/to/Puv.app identity}"
-PUV_IDENTITY="${2:--}"
-python3 - "$PUV_APP" "$PUV_IDENTITY" <<'PY'
+PIR_APP="${1:?Usage: sign-update-components.sh /path/to/Pir.app identity}"
+PIR_IDENTITY="${2:--}"
+python3 - "$PIR_APP" "$PIR_IDENTITY" <<'PY'
 import pathlib, subprocess, sys
 framework = pathlib.Path(sys.argv[1]) / 'Contents/Frameworks/Sparkle.framework'
 if not framework.exists():

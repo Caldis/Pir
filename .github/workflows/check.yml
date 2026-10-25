@@ -23,5 +23,5 @@ jobs:
       - run: scripts/build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: Puv-development-build
-          path: dist/Puv.app
+          name: Pir-development-build
+          path: dist/Pir.app

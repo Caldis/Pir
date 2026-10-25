@@ -13,18 +13,18 @@ POLICY = runpy.run_path(str(ROOT / 'scripts/version-metadata.py'))
 
 class UpdateFeedTests(unittest.TestCase):
     def setUp(self):
-        self.directory = tempfile.TemporaryDirectory(prefix='puv-update-test-')
+        self.directory = tempfile.TemporaryDirectory(prefix='pir-update-test-')
         self.addCleanup(self.directory.cleanup)
         self.root = pathlib.Path(self.directory.name)
-        self.app = self.root / 'Puv.app'
+        self.app = self.root / 'Pir.app'
         (self.app / 'Contents').mkdir(parents=True)
         self.key = base64.b64encode(bytes(range(32))).decode()
-        self.info = {'CFBundleIdentifier': 'me.caldis.puv', 'CFBundleShortVersionString': '0.2.0',
+        self.info = {'CFBundleIdentifier': 'me.caldis.pir', 'CFBundleShortVersionString': '0.2.0',
                      'CFBundleVersion': '20261025.2', 'SUPublicEDKey': self.key,
                      'LSMinimumSystemVersion': '13.0'}
         self.write_info()
         self.source = self.root / 'source.xml'
-        self.source.write_text('<rss version="2.0"><channel><title>Puv</title></channel></rss>')
+        self.source.write_text('<rss version="2.0"><channel><title>Pir</title></channel></rss>')
 
     def write_info(self):
         (self.app / 'Contents/Info.plist').write_bytes(plistlib.dumps(self.info))
@@ -33,9 +33,9 @@ class UpdateFeedTests(unittest.TestCase):
         stable = POLICY['release_metadata']('0.2.0', '20261025.2')
         beta = POLICY['release_metadata']('0.2.0', '20261025.2', 'beta')
         self.assertEqual(stable['tag'], '0.2.0')
-        self.assertEqual(stable['archive'], 'Puv.Versions.0.2.0-20261025.2.zip')
+        self.assertEqual(stable['archive'], 'Pir.Versions.0.2.0-20261025.2.zip')
         self.assertEqual(beta['tag'], '0.2.0-beta-20261025.2')
-        self.assertEqual(beta['archive'], 'Puv.Versions.0.2.0-beta-20261025.2.zip')
+        self.assertEqual(beta['archive'], 'Pir.Versions.0.2.0-beta-20261025.2.zip')
 
     def test_invalid_version_build_date_sequence_and_channel_are_rejected(self):
         for version, build, channel in [('v0.2.0', '20261025.2', 'stable'),
@@ -73,16 +73,16 @@ class UpdateFeedTests(unittest.TestCase):
         self.prepare('beta')
         item = ET.parse(self.root / 'out.xml').find('./channel/item')
         self.assertEqual(item.find('enclosure').get('url'),
-                         'https://github.com/Caldis/Puv/releases/download/0.2.0-beta-20261025.2/Puv.Versions.0.2.0-beta-20261025.2.zip')
+                         'https://github.com/Caldis/Pir/releases/download/0.2.0-beta-20261025.2/Pir.Versions.0.2.0-beta-20261025.2.zip')
         self.assertEqual(item.findtext(FEED['field']('minimumSystemVersion')), '13.0')
-        self.assertEqual(item.findtext('description'), '<h2>Updates</h2><p>Puv &lt;3</p>')
+        self.assertEqual(item.findtext('description'), '<h2>Updates</h2><p>Pir &lt;3</p>')
 
     def prepare(self, channel):
         names = POLICY['release_metadata'](self.info['CFBundleShortVersionString'], self.info['CFBundleVersion'], channel)
         archive = self.root / names['archive']
         archive.write_bytes(b'update fixture')
         notes = self.root / 'notes.html'
-        notes.write_text('<h2>Updates</h2><p>Puv &lt;3</p>')
+        notes.write_text('<h2>Updates</h2><p>Pir &lt;3</p>')
         signature = base64.b64encode(bytes(64)).decode()
         FEED['prepare'](self.app, channel, self.key, self.source, archive, signature, notes, self.root / 'out.xml')
 

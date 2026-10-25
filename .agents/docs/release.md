@@ -8,21 +8,21 @@
 
 | 环境变量 | 用途 |
 | --- | --- |
-| `PUV_SIGN_IDENTITY` | 可选 Developer ID Application 证书名称或 SHA1; 留空时使用 Xcode 云签名导出 |
-| `PUV_TEAM_ID` | Xcode 云签名团队 ID, 本项目默认 N7Z52F27XK |
-| `PUV_DEVELOPMENT_IDENTITY` | 可选开发签名身份; 云导出前用于归档签名 |
-| `PUV_NOTARY_PROFILE` | 公证 Keychain profile, 默认 notarytool |
-| `PUV_VERSION` | 应用版本, 默认 Resources/Info.plist 当前值 |
-| `PUV_BUILD` | 唯一构建编号 |
+| `PIR_SIGN_IDENTITY` | 可选 Developer ID Application 证书名称或 SHA1; 留空时使用 Xcode 云签名导出 |
+| `PIR_TEAM_ID` | Xcode 云签名团队 ID, 本项目默认 N7Z52F27XK |
+| `PIR_DEVELOPMENT_IDENTITY` | 可选开发签名身份; 云导出前用于归档签名 |
+| `PIR_NOTARY_PROFILE` | 公证 Keychain profile, 默认 notarytool |
+| `PIR_VERSION` | 应用版本, 默认 Resources/Info.plist 当前值 |
+| `PIR_BUILD` | 唯一构建编号 |
 
 凭据仅保存在 Keychain 或项目之外的 `.env` 文件, 日志仅记录证书名称与公证提交 ID
 
 ## 步骤
 
 1. 执行 `scripts/check.sh`, 并完成图片、文本、热键与偏好设置交互验收
-2. 执行 `scripts/release.sh`, 按需通过 `PUV_SIGN_IDENTITY` 指定本地分发证书
+2. 执行 `scripts/release.sh`, 按需通过 `PIR_SIGN_IDENTITY` 指定本地分发证书
 3. 脚本构建 Universal app、签名、提交公证、装订票据并验证 Gatekeeper
-4. 脚本生成 `dist/Puv-<version>-universal.dmg`, 验证磁盘镜像与 SHA256
+4. 脚本生成 `dist/Pir-<version>-universal.dmg`, 验证磁盘镜像与 SHA256
 5. GitHub Release 使用上述最终镜像与校验文件, 官网下载指向 Releases
 6. 下载已发布镜像并比对 SHA256, 挂载后验证应用签名与装订票据
 
@@ -34,24 +34,6 @@
 
 云签名模式通过 `scripts/cloud-sign.sh` 导出签名后的应用, 分发私钥保留在 Apple 的签名服务. 磁盘镜像包含 Developer ID 签名应用并单独接受公证与票据装订; 使用本地分发身份时镜像另加签名
 
-## 0.1.0 验证记录
-
-构建编号为 20261025.4, 本机检查执行 44 项 XCTest, 网站构建、静态资源路径与脚本语法检查通过
-
-| 项目 | 回读结果 |
-| --- | --- |
-| Universal | x86_64 + arm64, macOS 13+ |
-| 应用签名 | Developer ID Application: BIAO CHEN, N7Z52F27XK, Hardened Runtime |
-| 应用公证 | Accepted, df8b8991-73ef-4d36-b1d4-387c73c485d4 |
-| DMG 公证 | Accepted, 9c47fc6b-81fe-4d74-bbd6-a2c14b3894b9 |
-| 票据与执行评估 | app 与 DMG stapler validate 通过, Gatekeeper accepted / Notarized Developer ID |
-| DMG 完整性 | hdiutil verify 通过, 下载校验使用 Release 的 SHA256SUMS |
-| 入门动画 | 原生窗口捕获描边帧与完成帧, 运行日志在约 4.3 秒后记录 settled |
-| macOS 15 云端检查 | 44 项测试与 Universal 构建通过, 包含文本视口宽度兼容回归 |
-| 会话 | NSPanel 重启回读、隐藏状态、显式删除及恢复失败保留回归通过 |
-
-物理显示器拔插与 macOS 13 实机尚待验证, 当前覆盖屏幕拓扑模型与本机窗口恢复; 详细边界见 docs/platform-compatibility.md
-
 ## 原生外观与链接 SDK
 
 编译与测试使用 scripts/swift.sh, Universal 打包继续使用 scripts/build.sh. 包装脚本通过 xcrun 获取 SDK, 同时传递 --sdk 与 Clang 链接驱动的 -isysroot. scripts/check-build-sdk.py 检查各架构的 Mach-O SDK 记录
@@ -62,4 +44,4 @@
 
 更新界面、GitHub Release feed、独立更新签名与版本策略见 docs/updates.md. scripts/build.sh 嵌入 Sparkle.framework 并签名组件, cloud-sign.sh 与 release.sh 在根应用签名前使用相同发行身份重签组件
 
-公开 v0.1.0 的 DMG 与校验文件保留历史状态. 新增 appcast 与更新 ZIP 尚待正式发布, 本地测试与签名结果分别记录
+Pir 的发行源为 Caldis/Pir. 发布后独立回读应用、镜像、更新 ZIP 与签名 feed, 更新安装结果记录于本文件

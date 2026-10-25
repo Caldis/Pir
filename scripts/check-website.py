@@ -22,6 +22,6 @@ index = root / "index.html"
 assert index.exists(), "website/index.html is required"
 html = index.read_text()
 Links().feed(html)
-assert "github.com/Caldis/Puv/releases" in html, "Release download link is required"
+assert "github.com/Caldis/Pir/releases" in html, "Release download link is required"
 assert not re.search(r"(?:localhost|127\.0\.0\.1):\d+", html), "Remove local preview URLs"
 print("Website paths and release link passed")

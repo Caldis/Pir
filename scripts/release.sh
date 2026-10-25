@@ -1,44 +1,44 @@
 #!/bin/bash
 set -euo pipefail
-PUV_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$PUV_ROOT"
-PUV_NOTARY_PROFILE="${PUV_NOTARY_PROFILE:-notarytool}"
+PIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PIR_ROOT"
+PIR_NOTARY_PROFILE="${PIR_NOTARY_PROFILE:-notarytool}"
 scripts/check.sh
 scripts/build.sh
-PUV_APP="$PUV_ROOT/dist/Puv.app"
-if [[ -n "${PUV_SIGN_IDENTITY:-}" ]]; then
-    scripts/sign-update-components.sh "$PUV_APP" "$PUV_SIGN_IDENTITY"
-    codesign --force --options runtime --timestamp --sign "$PUV_SIGN_IDENTITY" "$PUV_APP"
+PIR_APP="$PIR_ROOT/dist/Pir.app"
+if [[ -n "${PIR_SIGN_IDENTITY:-}" ]]; then
+    scripts/sign-update-components.sh "$PIR_APP" "$PIR_SIGN_IDENTITY"
+    codesign --force --options runtime --timestamp --sign "$PIR_SIGN_IDENTITY" "$PIR_APP"
 else
     scripts/cloud-sign.sh
-    ditto dist/DeveloperID/Puv.app "$PUV_APP"
+    ditto dist/DeveloperID/Pir.app "$PIR_APP"
 fi
-codesign --verify --strict --verbose=2 "$PUV_APP"
-codesign -dvv "$PUV_APP" 2>&1 | tee dist/signature.txt
+codesign --verify --strict --verbose=2 "$PIR_APP"
+codesign -dvv "$PIR_APP" 2>&1 | tee dist/signature.txt
 if ! rg -q 'Authority=Developer ID Application:' dist/signature.txt; then
     printf '%s\n' 'Release requires a Developer ID Application signature' >&2
     exit 1
 fi
-ditto -c -k --keepParent "$PUV_APP" dist/Puv-notarize.zip
-xcrun notarytool submit dist/Puv-notarize.zip --keychain-profile "$PUV_NOTARY_PROFILE" --wait --output-format json > dist/notarization.json
+ditto -c -k --keepParent "$PIR_APP" dist/Pir-notarize.zip
+xcrun notarytool submit dist/Pir-notarize.zip --keychain-profile "$PIR_NOTARY_PROFILE" --wait --output-format json > dist/notarization.json
 python3 -c 'import json; assert json.load(open("dist/notarization.json"))["status"] == "Accepted", "Notarization requires Accepted status"'
-xcrun stapler staple "$PUV_APP"
-xcrun stapler validate "$PUV_APP"
-spctl --assess --type execute --verbose=2 "$PUV_APP"
-PUV_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PUV_APP/Contents/Info.plist")"
-PUV_STAGE="$(mktemp -d "${TMPDIR:-/tmp}/puv-dmg.XXXXXX")"
-trap 'rm -rf "$PUV_STAGE"' EXIT
-ditto "$PUV_APP" "$PUV_STAGE/Puv.app"
-ln -s /Applications "$PUV_STAGE/Applications"
-PUV_DMG="dist/Puv-${PUV_VERSION}-universal.dmg"
-hdiutil create -volname Puv -srcfolder "$PUV_STAGE" -ov -format UDZO "$PUV_DMG"
-if [[ -n "${PUV_SIGN_IDENTITY:-}" ]]; then
-    codesign --timestamp --sign "$PUV_SIGN_IDENTITY" "$PUV_DMG"
+xcrun stapler staple "$PIR_APP"
+xcrun stapler validate "$PIR_APP"
+spctl --assess --type execute --verbose=2 "$PIR_APP"
+PIR_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PIR_APP/Contents/Info.plist")"
+PIR_STAGE="$(mktemp -d "${TMPDIR:-/tmp}/pir-dmg.XXXXXX")"
+trap 'rm -rf "$PIR_STAGE"' EXIT
+ditto "$PIR_APP" "$PIR_STAGE/Pir.app"
+ln -s /Applications "$PIR_STAGE/Applications"
+PIR_DMG="dist/Pir-${PIR_VERSION}-universal.dmg"
+hdiutil create -volname Pir -srcfolder "$PIR_STAGE" -ov -format UDZO "$PIR_DMG"
+if [[ -n "${PIR_SIGN_IDENTITY:-}" ]]; then
+    codesign --timestamp --sign "$PIR_SIGN_IDENTITY" "$PIR_DMG"
 fi
-xcrun notarytool submit "$PUV_DMG" --keychain-profile "$PUV_NOTARY_PROFILE" --wait --output-format json > dist/dmg-notarization.json
+xcrun notarytool submit "$PIR_DMG" --keychain-profile "$PIR_NOTARY_PROFILE" --wait --output-format json > dist/dmg-notarization.json
 python3 -c 'import json; assert json.load(open("dist/dmg-notarization.json"))["status"] == "Accepted", "Disk image notarization requires Accepted status"'
-xcrun stapler staple "$PUV_DMG"
-xcrun stapler validate "$PUV_DMG"
-hdiutil verify "$PUV_DMG"
-(cd dist && shasum -a 256 "$(basename "$PUV_DMG")" > SHA256SUMS)
-printf '%s\n' "$PUV_DMG"
+xcrun stapler staple "$PIR_DMG"
+xcrun stapler validate "$PIR_DMG"
+hdiutil verify "$PIR_DMG"
+(cd dist && shasum -a 256 "$(basename "$PIR_DMG")" > SHA256SUMS)
+printf '%s\n' "$PIR_DMG"
