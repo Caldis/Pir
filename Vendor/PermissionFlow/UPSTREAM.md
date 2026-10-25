@@ -12,7 +12,7 @@ Included targets: PermissionFlow and SystemSettingsKit, with their original reso
 - Trailing whitespace is normalized
 
 - Package.swift exposes only the macOS targets used by Puv
-- Swift 6.1 enables IsolatedDeinit for the upstream isolated destructor; Swift 6.2 and later use the stable feature
+- The package requires Swift 6.2, which provides the upstream isolated destructor as a stable feature
 - SettingsWindowTracker follows the privacy list add/remove row when Accessibility can read the System Settings hierarchy
 - Unavailable hierarchy or an unrecognized layout retains the original Window Server geometry fallback
 - Internal hierarchy inspection runs at most twice per second, except after a window move

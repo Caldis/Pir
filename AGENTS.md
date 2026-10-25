@@ -26,6 +26,7 @@
 ## 工程边界
 
 - 应用使用 Swift + AppKit, 核心行为与系统集成分层
+- 构建工具链使用 Swift 6.2+, CI 选择 Xcode 26.3, 应用部署目标仍为 macOS 13
 - `Sources/PuvCore` 承载可测试逻辑, `Sources/Puv` 承载 AppKit 与系统 API
 - 热键录制复用 Mos 的相关实现, 来源与裁剪记录写入 `THIRD_PARTY_NOTICES.md`
 - 全局热键使用系统注册 API; 注册失败保留有效旧绑定
