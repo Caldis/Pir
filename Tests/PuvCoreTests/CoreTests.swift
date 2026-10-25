@@ -20,8 +20,10 @@ final class CoreTests: XCTestCase {
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 3,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                       isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-        pasteboard.setData(bitmap.representation(using: .png, properties: [:])!, forType: .png)
-        pasteboard.setString("Image title", forType: .string)
+        bitmap.bitmapData?.initialize(repeating: 255, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        pasteboard.declareTypes([.png, .string], owner: nil)
+        XCTAssertTrue(pasteboard.setData(bitmap.representation(using: .png, properties: [:])!, forType: .png))
+        XCTAssertTrue(pasteboard.setString("Image title", forType: .string))
         guard case .image(let image) = try ClipboardReader.read(from: pasteboard) else {
             return XCTFail("Expected image when clipboard has both representations")
         }
