@@ -43,4 +43,4 @@ macOS 11 缺少当前 TextKit 2 视口渲染基础, 需要独立的文本布局�
 
 - [Apple SMAppService](https://developer.apple.com/documentation/servicemanagement/smappservice)
 - [Apple NSTextView](https://developer.apple.com/documentation/appkit/nstextview)
-- [PermissionFlow 2.11.4](https://github.com/jaywcjlove/PermissionFlow/tree/2.11.4)
+- [PermissionFlow 2.11.4](https://github.com/jaywcjlove/PermissionFlow/tree/65434c9ae04dba97cf52c1dffbe3e4e62b547c82)
