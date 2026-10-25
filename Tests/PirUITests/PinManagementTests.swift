@@ -372,8 +372,9 @@ final class PinManagementTests: XCTestCase {
         let alignment = recorder.alignmentRect(forFrame: recorder.bounds)
         XCTAssertEqual(keycaps.minX - alignment.minX, 4, accuracy: 0.5)
         XCTAssertLessThanOrEqual(keycaps.maxX, alignment.maxX - 4)
-        XCTAssertEqual(keycaps.minY - alignment.minY, 4, accuracy: 0.5)
-        XCTAssertEqual(alignment.maxY - keycaps.maxY, 4, accuracy: 0.5)
+        XCTAssertEqual(alignment.height - keycaps.height, 8, accuracy: 0.5)
+        // Older AppKit square bezels apply a one-point optical offset to their content.
+        XCTAssertEqual(keycaps.midY, alignment.midY, accuracy: 1)
         XCTAssertEqual(preview.arrangedSubviews.count, 3)
         XCTAssertLessThan(try XCTUnwrap(preview.arrangedSubviews.first).frame.width, 85)
         for keycap in [preview.arrangedSubviews[0], preview.arrangedSubviews[2]] {
