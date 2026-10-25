@@ -11,6 +11,7 @@ class KeyPreview: NSStackView {
     enum Status {
         case normal
         case recorded
+        case unchanged
         case duplicate
         case recording
     }
@@ -19,6 +20,14 @@ class KeyPreview: NSStackView {
     private var status: Status = .normal
     private var keyViews: [NSView] = []
     private var waitingView: KeyComponentContainer?
+    private var keycapSize = KeyPreview.VIEW_SIZE
+    private var fontSize = KeyPreview.FONT_SIZE
+
+    convenience init(keycapSize: CGFloat, fontSize: CGFloat = KeyPreview.FONT_SIZE) {
+        self.init(frame: .zero)
+        self.keycapSize = keycapSize
+        self.fontSize = fontSize
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -83,7 +92,7 @@ class KeyPreview: NSStackView {
         for (index, component) in keyComponents.enumerated() {
             if index > 0 {
                 let plusLabel = NSTextField(labelWithString: "+")
-                plusLabel.font = NSFont.systemFont(ofSize: KeyPreview.FONT_SIZE)
+                plusLabel.font = NSFont.systemFont(ofSize: fontSize)
                 plusLabel.textColor = .secondaryLabelColor
                 addArrangedSubview(plusLabel)
             }
@@ -98,8 +107,8 @@ class KeyPreview: NSStackView {
         let container = KeyComponentContainer(keyStatus: status, isWaiting: isWaiting)
 
         let label = NSTextField(labelWithString: text)
-        label.font = NSFont.systemFont(ofSize: KeyPreview.FONT_SIZE, weight: .medium)
-        label.textColor = (status == .recorded || status == .duplicate) ? NSColor.white : NSColor.labelColor
+        label.font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
+        label.textColor = [.recorded, .unchanged, .duplicate].contains(status) ? NSColor.white : NSColor.labelColor
         label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(label)
@@ -107,9 +116,8 @@ class KeyPreview: NSStackView {
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
-            container.widthAnchor.constraint(greaterThanOrEqualTo: label.widthAnchor, constant: 12),
-            container.widthAnchor.constraint(greaterThanOrEqualToConstant: KeyPreview.VIEW_SIZE),
-            container.heightAnchor.constraint(equalToConstant: KeyPreview.VIEW_SIZE),
+            container.widthAnchor.constraint(equalToConstant: max(keycapSize, ceil(label.intrinsicContentSize.width) + 12)),
+            container.heightAnchor.constraint(equalToConstant: keycapSize),
         ])
 
         return container
@@ -117,6 +125,7 @@ class KeyPreview: NSStackView {
 }
 
 private final class KeyComponentContainer: NSView {
+    override var wantsUpdateLayer: Bool { true }
     let keyStatus: KeyPreview.Status
     let isWaitingPlaceholder: Bool
 
@@ -144,12 +153,20 @@ private final class KeyComponentContainer: NSView {
     private func getBackgroundColor() -> NSColor {
         switch keyStatus {
         case .normal, .recording:
-            return NSColor.quaternaryLabelColor
+            let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            return dark ? NSColor(calibratedWhite: 0.5, alpha: 0.2) : NSColor(calibratedWhite: 0, alpha: 0.1)
         case .recorded:
             return NSColor.systemGreen
-        case .duplicate:
+        case .unchanged:
             return NSColor.systemBlue
+        case .duplicate:
+            return NSColor.systemRed
         }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
     }
 
     private func startBreathingAnimation() {

@@ -50,4 +50,16 @@
 | macOS 15 云端检查 | 44 项测试与 Universal 构建通过, 包含文本视口宽度兼容回归 |
 | 会话 | NSPanel 重启回读、隐藏状态、显式删除及恢复失败保留回归通过 |
 
-物理显示器拔插与 macOS 13 实机尚待验证, 当前覆盖屏幕拓扑模型与本机窗口恢复. 未授权辅助功能时, 权限引导继续使用系统设置窗口外框定位; 详细边界见 docs/platform-compatibility.md
+物理显示器拔插与 macOS 13 实机尚待验证, 当前覆盖屏幕拓扑模型与本机窗口恢复; 详细边界见 docs/platform-compatibility.md
+
+## 原生外观与链接 SDK
+
+编译与测试使用 scripts/swift.sh, Universal 打包继续使用 scripts/build.sh. 包装脚本通过 xcrun 获取 SDK, 同时传递 --sdk 与 Clang 链接驱动的 -isysroot. scripts/check-build-sdk.py 检查各架构的 Mach-O SDK 记录
+
+最低系统版本 minos 为 13.0, SDK 为当前构建工具链版本. 本机检查记录为 SDK 27.0. 页签与按钮使用 AppKit 原生外观, SDK 记录参与系统兼容行为选择
+
+## Sparkle 更新资产
+
+更新界面、GitHub Release feed、独立更新签名与版本策略见 docs/updates.md. scripts/build.sh 嵌入 Sparkle.framework 并签名组件, cloud-sign.sh 与 release.sh 在根应用签名前使用相同发行身份重签组件
+
+公开 v0.1.0 的 DMG 与校验文件保留历史状态. 新增 appcast 与更新 ZIP 尚待正式发布, 本地测试与签名结果分别记录

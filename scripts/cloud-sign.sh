@@ -17,6 +17,7 @@ if [[ -d "$PUV_ARCHIVE" ]]; then rm -rf "$PUV_ARCHIVE"; fi
 if [[ -d dist/DeveloperID ]]; then rm -rf dist/DeveloperID; fi
 mkdir -p "$PUV_ARCHIVE/Products/Applications"
 ditto dist/Puv.app "$PUV_ARCHIVE/Products/Applications/Puv.app"
+"$PUV_ROOT/scripts/sign-update-components.sh" "$PUV_ARCHIVE/Products/Applications/Puv.app" "$PUV_DEVELOPMENT_IDENTITY"
 codesign --force --options runtime --timestamp --sign "$PUV_DEVELOPMENT_IDENTITY" "$PUV_ARCHIVE/Products/Applications/Puv.app"
 # Xcode's export service can use cloud-managed Developer ID certificates without exporting private keys.
 python3 - "$PUV_TEAM_ID" "$PUV_DEVELOPMENT_IDENTITY" <<'PY'

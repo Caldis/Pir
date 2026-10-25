@@ -3,11 +3,22 @@ import XCTest
 @testable import PuvCore
 
 final class CoreTests: XCTestCase {
+    private func isolatedPasteboard() -> NSPasteboard {
+        let pasteboard = NSPasteboard(name: .init("PuvTests.\(UUID().uuidString)"))
+        pasteboard.clearContents()
+        return pasteboard
+    }
+
     func testClipboardPreservesWhitespaceAndUnicode() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let original = "  title\n\tlet value = 1\n\n中文 😀\n"
-        pasteboard.setString(original, forType: .string)
+        pasteboard.declareTypes([.string], owner: nil)
+        XCTAssertTrue(pasteboard.setString(original, forType: .string))
+        XCTAssertTrue(pasteboard.types?.contains(.string) == true)
+        XCTAssertFalse(pasteboard.types?.contains(.png) == true)
+        XCTAssertFalse(pasteboard.types?.contains(.tiff) == true)
+        XCTAssertEqual(pasteboard.string(forType: .string), original)
         guard case .text(let value) = try ClipboardReader.read(from: pasteboard) else {
             return XCTFail("Expected plain text")
         }
@@ -15,7 +26,7 @@ final class CoreTests: XCTestCase {
     }
 
     func testClipboardPrefersImageOverText() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 3,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -32,7 +43,7 @@ final class CoreTests: XCTestCase {
     }
 
     func testInvalidImageFallsBackToText() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         pasteboard.setData(Data([0, 1, 2]), forType: .png)
         pasteboard.setString("text fallback", forType: .string)
@@ -43,7 +54,7 @@ final class CoreTests: XCTestCase {
     }
 
     func testJPEGRepresentationIsRecognizedAsImage() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 4, pixelsHigh: 3,
                                       bitsPerSample: 8, samplesPerPixel: 3, hasAlpha: false,
@@ -58,13 +69,13 @@ final class CoreTests: XCTestCase {
     }
 
     func testUnsupportedClipboardReportsError() {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         XCTAssertThrowsError(try ClipboardReader.read(from: pasteboard))
     }
 
     func testLargeImageIsDownsampledBeforeRetention() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8192, pixelsHigh: 4,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -81,13 +92,16 @@ final class CoreTests: XCTestCase {
     }
 
     func testRetinaTIFFPreservesLogicalPointSize() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 800, pixelsHigh: 600,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                       isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         bitmap.size = NSSize(width: 400, height: 300)
-        pasteboard.setData(bitmap.tiffRepresentation!, forType: .tiff)
+        let tiff = try XCTUnwrap(bitmap.tiffRepresentation)
+        pasteboard.declareTypes([.tiff], owner: nil)
+        XCTAssertTrue(pasteboard.setData(tiff, forType: .tiff))
+        XCTAssertEqual(pasteboard.data(forType: .tiff), tiff)
         guard case .image(let image) = try ClipboardReader.read(from: pasteboard) else {
             return XCTFail("Expected Retina TIFF")
         }
@@ -97,7 +111,7 @@ final class CoreTests: XCTestCase {
     }
 
     func testOversizedTextReportsSizeError() {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         pasteboard.setString(String(repeating: "A", count: ClipboardReader.maximumTextBytes + 1), forType: .string)
         XCTAssertThrowsError(try ClipboardReader.read(from: pasteboard)) { error in
@@ -106,13 +120,15 @@ final class CoreTests: XCTestCase {
     }
 
     func testRTFOnlyClipboardRetainsTextLayout() throws {
-        let pasteboard = NSPasteboard.withUniqueName()
+        let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let original = "  Heading\n\tIndented\n"
         let attributed = NSAttributedString(string: original)
         let rtf = try attributed.data(from: NSRange(location: 0, length: attributed.length),
                                       documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
-        pasteboard.setData(rtf, forType: .rtf)
+        pasteboard.declareTypes([.rtf], owner: nil)
+        XCTAssertTrue(pasteboard.setData(rtf, forType: .rtf))
+        XCTAssertEqual(pasteboard.data(forType: .rtf), rtf)
         guard case .text(let value) = try ClipboardReader.read(from: pasteboard) else {
             return XCTFail("Expected plain text from RTF")
         }

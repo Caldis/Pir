@@ -1,78 +1,6 @@
+import { createAmbientArtwork } from './artwork.js';
 const releasePage = 'https://github.com/Caldis/Puv/releases/latest';
-const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
-const canvas = document.querySelector('#shader-art');
-const artPanel = document.querySelector('.scene-glow');
-let shader;
-let shaderLoading = false;
-let visible = true;
-let pausedByUser = false;
-let destroyed = false;
-
-// The CSS artwork remains visible when WebGPU is absent or the GPU is lost.
-async function startArtwork() {
-  if (shader || shaderLoading || destroyed || motionPreference.matches || navigator.connection?.saveData || !navigator.gpu) return;
-  shaderLoading = true;
-  try {
-    const { createShader } = await import('shaders/js');
-    if (destroyed) return;
-    shader = await createShader(canvas, {
-      components: [{ type: 'Aurora', id: 'light', props: {
-        colorA: '#b591ed', colorB: '#a9ece5', colorC: '#eea7a6',
-        intensity: 67, speed: 0.12, curtainCount: 3, waviness: 60,
-        rayDensity: 32, height: 65, center: { x: 0.49, y: 0.6 }, seed: 14,
-      } }],
-    }, {
-      disableTelemetry: true,
-      observeElement: false,
-      onReady: () => artPanel.classList.add('shader-ready'),
-      onError: () => artPanel.classList.remove('shader-ready'),
-    });
-    if (destroyed) { shader.destroy(); return; }
-    resizeArtwork();
-    updatePlayback();
-  } catch {
-    artPanel.classList.remove('shader-ready');
-  } finally {
-    shaderLoading = false;
-  }
-}
-
-function resizeArtwork() {
-  if (!shader) return;
-  // A 520px render target keeps the decorative shader's pixel cost bounded.
-  const bounds = canvas.getBoundingClientRect();
-  const scale = Math.min(1, 520 / Math.max(bounds.width, bounds.height));
-  shader.resize(Math.max(1, Math.round(bounds.width * scale)), Math.max(1, Math.round(bounds.height * scale)));
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
-}
-
-function updatePlayback() {
-  const shouldPause = document.hidden || !visible || pausedByUser || motionPreference.matches;
-  if (shader) shader[shouldPause ? 'pause' : 'resume']();
-  const button = document.querySelector('#motion-toggle');
-  button.setAttribute('aria-pressed', String(pausedByUser));
-  button.setAttribute('aria-label', pausedByUser ? '播放动态效果' : '暂停动态效果');
-  button.innerHTML = pausedByUser
-    ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 3 7 5-7 5Z"/></svg>'
-    : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg>';
-}
-
-const visibilityObserver = new IntersectionObserver(([entry]) => {
-  visible = entry.isIntersecting;
-  if (visible) startArtwork();
-  updatePlayback();
-}, { threshold: 0.01 });
-visibilityObserver.observe(artPanel);
-const resizeObserver = new ResizeObserver(resizeArtwork);
-resizeObserver.observe(artPanel);
-document.addEventListener('visibilitychange', updatePlayback);
-motionPreference.addEventListener('change', () => { startArtwork(); updatePlayback(); });
-document.querySelector('#motion-toggle').addEventListener('click', () => {
-  pausedByUser = !pausedByUser;
-  startArtwork();
-  updatePlayback();
-});
+const artwork = createAmbientArtwork();
 
 for (const panel of document.querySelectorAll('[data-draggable]')) {
   let offset = { x: 0, y: 0 };
@@ -113,12 +41,12 @@ for (const button of document.querySelectorAll('[data-close]')) {
   button.addEventListener('click', () => {
     document.querySelector(`.${button.dataset.close}`).hidden = true;
     document.querySelector('#reset-demo').focus();
-    updatePlayback();
+    artwork.update();
   });
 }
 document.querySelector('#reset-demo').addEventListener('click', () => {
   document.querySelectorAll('[data-draggable]').forEach((panel) => panel.resetDemo());
-  updatePlayback();
+  artwork.update();
 });
 
 async function resolveDownload() {
@@ -143,11 +71,3 @@ async function resolveDownload() {
   }
 }
 resolveDownload();
-window.addEventListener('pagehide', (event) => {
-  if (event.persisted) { shader?.pause(); return; }
-  destroyed = true;
-  shader?.destroy();
-  resizeObserver.disconnect();
-  visibilityObserver.disconnect();
-});
-window.addEventListener('pageshow', (event) => { if (event.persisted) updatePlayback(); });

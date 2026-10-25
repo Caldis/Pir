@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" fill="none">
+  <defs>
+    <linearGradient id="ribbon" x1="1455" y1="20" x2="640" y2="1000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1d225e"/>
+      <stop offset=".18" stop-color="#7586f7"/>
+      <stop offset=".35" stop-color="#c5b5f6"/>
+      <stop offset=".46" stop-color="#3e486f"/>
+      <stop offset=".54" stop-color="#9de6e8"/>
+      <stop offset=".62" stop-color="#417f9f"/>
+      <stop offset=".76" stop-color="#594195"/>
+      <stop offset=".88" stop-color="#e5a6c6"/>
+      <stop offset="1" stop-color="#24215c"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="1580" y1="0" x2="650" y2="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c7d8ff" stop-opacity="0"/>
+      <stop offset=".25" stop-color="#c7d8ff"/>
+      <stop offset=".52" stop-color="#bdfff5"/>
+      <stop offset=".76" stop-color="#d2b0fe"/>
+      <stop offset="1" stop-color="#ffbcae" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="bloom"><stop stop-color="#5455c6" stop-opacity=".6"/><stop offset="1" stop-color="#292451" stop-opacity="0"/></radialGradient>
+    <filter id="soft"><feGaussianBlur stdDeviation="28"/></filter>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".055"/></feComponentTransfer></filter>
+  </defs>
+  <ellipse cx="1140" cy="490" rx="710" ry="560" fill="url(#bloom)"/>
+  <path d="M1720-100C1340-85 1370 145 1170 235C950 335 743 248 739 415C733 626 1189 580 1128 756C1083 885 762 823 610 1130" stroke="url(#ribbon)" stroke-width="175" filter="url(#soft)" opacity=".48"/>
+  <path d="M1660-120C1352 12 1484 189 1223 275C990 352 827 269 836 432C849 646 1269 590 1207 771C1155 922 823 859 725 1140" stroke="url(#ribbon)" stroke-width="140" opacity=".88"/>
+  <path d="M1625-130C1332 12 1476 158 1213 245C975 324 818 247 806 417C792 619 1235 606 1176 774C1124 921 787 870 697 1125" stroke="url(#edge)" stroke-width="2.5" opacity=".88"/>
+  <path d="M1770 45C1440 143 1544 339 1330 401C1144 454 1032 350 1037 481C1042 605 1410 647 1292 845C1195 1007 953 978 896 1150" stroke="url(#edge)" stroke-width="1" opacity=".27"/>
+  <path d="M1440-90C1221 42 1340 198 1118 299C877 409 737 358 780 513" stroke="url(#ribbon)" stroke-width="32" opacity=".36"/>
+  <path d="M0 0h1600v1100H0z" filter="url(#grain)" opacity=".65"/>
+</svg>

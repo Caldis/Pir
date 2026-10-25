@@ -18,6 +18,7 @@ struct PinSummary: Identifiable {
 final class PinManager: ObservableObject {
     private struct LivePin {
         let panel: PinPanel
+        let content: ClipboardContent
         var record: PinRecord
         let bytes: Int
         var presentedFrame: NSRect
@@ -126,12 +127,13 @@ final class PinManager: ObservableObject {
         logger.info("Session restored count=\(self.pins.count, privacy: .public)")
     }
 
-    func show(_ content: ClipboardContent) throws {
+    @discardableResult
+    func show(_ content: ClipboardContent, on preferredScreen: NSScreen? = nil) throws -> UUID? {
         if restorationStarted, !restorationFinished { finishRestoration() }
         let bytes = byteCost(content)
         guard pins.count < Self.maximumPins, estimatedBytes + bytes <= Self.maximumBytes else { throw PinError.limit }
-        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main,
-              let display = display(screen) else { return }
+        guard let screen = preferredScreen ?? NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main,
+              let display = display(screen) else { return nil }
         let id = UUID()
         let panel = PinPanel(content: content, screen: screen, offset: pins.count)
         let kind: PinRecord.Kind
@@ -146,6 +148,15 @@ final class PinManager: ObservableObject {
         if !restorationStarted { restorationStarted = true; restorationFinished = true }
         scheduleSave()
         logger.info("Pin created kind=\(kind.rawValue, privacy: .public) count=\(self.pins.count, privacy: .public)")
+        return id
+    }
+
+    @discardableResult
+    func reveal(_ id: UUID) -> Bool {
+        guard let pin = pins[id] else { return false }
+        setHidden(false, for: id)
+        pin.panel.orderFrontRegardless()
+        return true
     }
 
     private func register(panel: PinPanel, record: PinRecord, bytes: Int, content: ClipboardContent) {
@@ -179,7 +190,7 @@ final class PinManager: ObservableObject {
         }
         let summary = PinSummary(id: id, kind: record.kind, title: title, createdAt: record.createdAt,
                                  isHidden: record.isHidden, thumbnail: nil)
-        pins[id] = LivePin(panel: panel, record: record, bytes: bytes, presentedFrame: panel.frame, summary: summary)
+        pins[id] = LivePin(panel: panel, content: content, record: record, bytes: bytes, presentedFrame: panel.frame, summary: summary)
         estimatedBytes += bytes
         if !record.isHidden { panel.orderFrontRegardless() }
         publishSummaries()
@@ -198,6 +209,17 @@ final class PinManager: ObservableObject {
     }
 
     func delete(_ id: UUID) { pins[id]?.panel.close() }
+
+    func pasteAgain(_ id: UUID) throws {
+        if restorationStarted, !restorationFinished { finishRestoration() }
+        guard let pin = pins[id] else { return }
+        try show(pin.content)
+    }
+
+    func deleteAll() {
+        if restorationStarted, !restorationFinished { finishRestoration() }
+        for id in Array(pins.keys) { delete(id) }
+    }
 
     private func publishSummaries() {
         summaries = pins.values.map(\.summary).sorted { $0.createdAt < $1.createdAt }

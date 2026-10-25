@@ -20,6 +20,11 @@ public final class SettingsStore {
         set { defaults.set(newValue, forKey: "hideStatusItem") }
     }
 
+    public var hotKeyEnabled: Bool {
+        get { defaults.object(forKey: "hotKeyEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "hotKeyEnabled") }
+    }
+
     public var hasCompletedOnboarding: Bool {
         get { defaults.bool(forKey: "hasCompletedOnboarding") }
         set { defaults.set(newValue, forKey: "hasCompletedOnboarding") }

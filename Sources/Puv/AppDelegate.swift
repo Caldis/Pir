@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let model = PreferencesModel(settings: settings, pins: pins)
         model.onVisibilityChange = { [weak self] hidden in self?.updateStatusItem(hidden: hidden) }
         model.onHotKeyChange = { [weak self] value in try self?.hotKey.replace(with: value) }
+        model.onHotKeyClear = { [weak self] in self?.hotKey.clear() }
         model.onRecordingChange = { [weak self] active in self?.hotKeyBackend.isRecording = active }
         model.onShowOnboarding = { [weak self] in self?.showOnboarding() }
         return model
@@ -19,14 +20,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var preferences = PreferencesWindowController(model: preferencesModel)
     private var feedback: FeedbackPanel?
     private var onboarding: OnboardingWindowController?
+    private lazy var onboardingDemo = OnboardingDemoController(pins: pins)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         pins.onPersistenceFailure = { [weak self] in self?.showFeedback(L("Pins could not be saved. Check available disk space.")) }
         pins.restoreSession()
+        Task { @MainActor in UpdateManager.shared.scheduleCheckOnAppStartIfNeeded() }
         installMainMenu()
         updateStatusItem(hidden: settings.hideStatusItem)
         hotKeyBackend.onPress = { [weak self] in self?.paste() }
-        do { try hotKey.replace(with: settings.hotKey) }
+        hotKeyBackend.onPressWhileRecording = { [weak self] key in
+            self?.preferencesModel.onHotKeyDuringRecording?(key)
+        }
+        do { if settings.hotKeyEnabled { try hotKey.replace(with: settings.hotKey) } }
         catch {
             preferencesModel.error = L("Shortcut unavailable. Try another combination.")
         }
@@ -47,8 +53,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showOnboarding() {
         preferences.close()
         if onboarding == nil {
-            let controller = OnboardingWindowController(settings: settings)
-            controller.onFinish = { [weak self] in self?.preferences.present() }
+            let controller = OnboardingWindowController(settings: settings, model: preferencesModel)
+            controller.onTryShortcut = { [weak self] screen in
+                guard let self else { return false }
+                do { try self.onboardingDemo.showLogo(on: screen); return true }
+                catch { self.preferencesModel.error = L("Close a pin before adding another."); return false }
+            }
+            controller.onFinish = { [weak self] in
+                self?.onboardingDemo.stopCelebration()
+                self?.preferences.present()
+            }
             onboarding = controller
         }
         onboarding?.present()
@@ -95,6 +109,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
 
     private func paste() {
+        if onboarding?.window?.isVisible == true {
+            onboarding?.tryShortcut()
+            return
+        }
         do { try pins.show(ClipboardReader.read()) }
         catch ClipboardError.tooLarge { showFeedback(L("Clipboard content is too large.")) }
         catch PinManager.PinError.limit { showFeedback(L("Close a pin before adding another.")) }
@@ -113,11 +131,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        onboardingDemo.stopCelebration()
         hotKey.clear()
         pins.flushSession()
         pins.closeAll()
         feedback?.close()
-        onboarding?.stopPermissionGuidance()
     }
 }
 

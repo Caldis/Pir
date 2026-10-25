@@ -7,6 +7,7 @@ scripts/check.sh
 scripts/build.sh
 PUV_APP="$PUV_ROOT/dist/Puv.app"
 if [[ -n "${PUV_SIGN_IDENTITY:-}" ]]; then
+    scripts/sign-update-components.sh "$PUV_APP" "$PUV_SIGN_IDENTITY"
     codesign --force --options runtime --timestamp --sign "$PUV_SIGN_IDENTITY" "$PUV_APP"
 else
     scripts/cloud-sign.sh

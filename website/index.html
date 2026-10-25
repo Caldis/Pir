@@ -13,9 +13,10 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+  <div class="ambient-art" aria-hidden="true"><div class="ambient-fallback"></div><canvas id="shader-art" width="960" height="660"></canvas></div>
   <a class="skip-link" href="#main">跳到正文</a>
   <header class="header wrap">
-    <a class="brand" href="./" aria-label="Puv 首页"><img src="./assets/app-icon.png" width="44" height="44" alt=""><span>puv</span></a>
+    <a class="brand" href="./" aria-label="Puv 首页"><img src="./assets/app-icon.png" width="44" height="44" alt=""><span>Puv</span></a>
     <nav aria-label="主导航"><a href="#details">功能</a><a href="https://github.com/Caldis/Puv" target="_blank" rel="noreferrer">GitHub <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></a></nav>
   </header>
   <main id="main">
@@ -29,7 +30,6 @@
         </div>
       </div>
       <div class="scene" aria-label="Puv 图片与文字悬浮面板交互演示">
-        <div class="scene-glow" aria-hidden="true"><canvas id="shader-art"></canvas></div>
         <div class="desktop-ghost" aria-hidden="true"><div class="desktop-menubar"><span>◉ &nbsp; Finder</span><span>周五 10:24</span></div><div class="work-window"><div class="work-title"><span class="traffic-lights">● ● ●</span><span>周末出行</span></div><div class="work-body"><span class="work-date">备忘录</span><h3>去山里走走</h3><p>找一个有湖泊的地方<br>沿着山脚慢慢走</p><div class="work-line"></div><p>行程与灵感, 随手记下.</p></div></div><div class="desktop-dock"><i></i><i></i><i></i><i></i></div></div>
         <div class="float-panel art-panel" data-draggable tabindex="0" role="group" aria-label="图片悬浮面板, 可以拖动或使用方向键移动">
           <img class="pinned-landscape" src="./assets/alpine-lake.svg" width="640" height="480" alt="粉色晨光下的雪山与蓝绿色湖泊" draggable="false">
