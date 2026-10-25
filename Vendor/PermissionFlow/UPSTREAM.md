@@ -9,6 +9,8 @@ Included targets: PermissionFlow and SystemSettingsKit, with their original reso
 
 ## Local changes
 
+- Trailing whitespace is normalized
+
 - Package.swift exposes only the macOS targets used by Puv
 - SettingsWindowTracker follows the privacy list add/remove row when Accessibility can read the System Settings hierarchy
 - Unavailable hierarchy or an unrecognized layout retains the original Window Server geometry fallback

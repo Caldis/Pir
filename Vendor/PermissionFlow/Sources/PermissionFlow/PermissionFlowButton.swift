@@ -24,7 +24,7 @@ public struct PermissionFlowButton: View {
         self.suggestedAppURLs = suggestedAppURLs
         self.title = title
         self.customLabel = nil
-        
+
         // Initialize with checking state, will be updated on appear
         _buttonState = State(initialValue: PermissionFlowButtonState.make(from: .checking))
     }
@@ -40,7 +40,7 @@ public struct PermissionFlowButton: View {
         self.suggestedAppURLs = suggestedAppURLs
         self.title = nil
         self.customLabel = { AnyView(label($0)) }
-        
+
         // Initialize with checking state, will be updated on appear
         _buttonState = State(initialValue: PermissionFlowButtonState.make(from: .checking))
     }
