@@ -22,7 +22,7 @@ Puv 的键盘录制交互、按键显示与偏好页签图标提取并适配自 
 
 欢迎页的屏幕烟花使用 [Vortex](https://github.com/twostraws/Vortex), 版本 1.0.4, 作者 Paul Hudson
 
-上游采用 MIT 许可证, 完整声明见 `licenses/Vortex.txt`, 随应用资源一起分发
+上游采用 MIT 许可证, 完整声明见 `licenses/Vortex.txt`, 随应用资源一起分发. 固定源码与资源清单适配见 `Vendor/Vortex/UPSTREAM.md`
 
 ## Sparkle
 

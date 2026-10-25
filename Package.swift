@@ -7,7 +7,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.executable(name: "Puv", targets: ["Puv"])],
     dependencies: [
-        .package(url: "https://github.com/twostraws/Vortex", exact: "1.0.4"),
+        .package(path: "Vendor/Vortex"),
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")
     ],
     targets: [
