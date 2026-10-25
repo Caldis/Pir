@@ -1,0 +1,13 @@
+{
+  "name": "puv-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=./",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": { "shaders": "4.0.5" },
+  "devDependencies": { "vite": "7.2.2" }
+}

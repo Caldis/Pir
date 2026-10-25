@@ -1,0 +1,57 @@
+Puv Source License 1.0
+
+Copyright (c) 2026 Caldis / BIAO CHEN
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+use, copy, modify, merge, publish, distribute, sublicense, and sell copies
+of the Software, subject to the following conditions:
+
+1. Notices
+
+The above copyright notice and this entire license shall be included in all
+copies or substantial portions of the Software. Modified distributions
+shall identify their changes and shall not represent themselves as an
+official release of Puv.
+
+2. Application marketplace distribution
+
+Without a separate written permission from Caldis / BIAO CHEN, you may not
+submit, publish, distribute, or offer through an application marketplace a
+Covered Application, whether for payment or free of charge, under your own
+account or through another person or entity.
+
+A "Covered Application" is an application whose primary functionality is
+pinning clipboard images or text in floating desktop windows and which
+contains the Software or substantial portions of it, including modified,
+renamed, or repackaged versions.
+
+An "application marketplace" is a service that accepts application listings
+from developers and distributes applications to end users, including the
+Apple App Store and Mac App Store. A source code repository, package
+registry for development dependencies, or direct download from a project's
+own website is not an application marketplace under this license.
+
+3. Copyright holder and third-party components
+
+The application marketplace restriction does not limit distribution by
+Caldis / BIAO CHEN or parties separately authorized in writing by that
+copyright holder. No trademark rights are granted by this license.
+
+Third-party components remain subject to their respective licenses. This
+license does not add restrictions to any separately licensed third-party
+component. See THIRD_PARTY_NOTICES.md and the licenses directory.
+
+4. Disclaimer
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+This is a source-available license based on the MIT permission grant and
+warranty disclaimer, with additional application marketplace conditions.
+It is not the MIT License or an OSI-approved open source license.

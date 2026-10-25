@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+dist/
+tmp/
+.env
+.env.*
+!.env.example
+*.xcuserstate
+xcuserdata/
+node_modules/
+website/dist/

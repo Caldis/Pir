@@ -1,0 +1,25 @@
+name: Check
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci --prefix website
+      - run: npm run build --prefix website
+      - run: scripts/check.sh
+      - run: scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Puv-development-build
+          path: dist/Puv.app
