@@ -81,7 +81,7 @@ private final class PinSurface: NSView {
         case .image(let image):
             body = PinImageView(image: image)
         case .text(let text):
-            let scroll = NSScrollView()
+            let scroll = PinTextScrollView()
             scroll.borderType = .noBorder
             scroll.hasVerticalScroller = true
             scroll.hasHorizontalScroller = false
@@ -102,7 +102,7 @@ private final class PinSurface: NSView {
             // NSTextView otherwise retains its initial minimum width and clips narrow windows.
             view.minSize = NSSize(width: 0, height: 0)
             view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-            view.autoresizingMask = [.width]
+            view.autoresizingMask = []
             view.textContainer?.widthTracksTextView = true
             view.textContainer?.containerSize = NSSize(width: 420, height: CGFloat.greatestFiniteMagnitude)
             view.textContainer?.lineFragmentPadding = 0
@@ -267,6 +267,26 @@ final class PinImageView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+private final class PinTextScrollView: NSScrollView {
+    override func tile() {
+        super.tile()
+        synchronizeTextWidth()
+    }
+
+    override func layout() {
+        super.layout()
+        synchronizeTextWidth()
+    }
+
+    private func synchronizeTextWidth() {
+        guard let text = documentView as? NSTextView else { return }
+        let width = contentView.bounds.width
+        guard width > 0, abs(text.frame.width - width) > 0.5 else { return }
+        // Older AppKit versions preserve the pre-attachment width during clip-view autoresizing.
+        text.setFrameSize(NSSize(width: width, height: text.frame.height))
+    }
 }
 
 private final class PinTextView: NSTextView {
