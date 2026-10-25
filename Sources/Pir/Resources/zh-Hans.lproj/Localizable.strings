@@ -78,3 +78,9 @@
 "Select and edit text. Drag the top margin to move. Drag any edge to resize." = "框选与编辑文字. 拖动顶部留白移动窗口, 拖动边缘调整尺寸.";
 "Copy something, then press your shortcut." = "复制内容后, 按下贴上热键";
 "Pins could not be saved. Check available disk space." = "贴图无法保存, 请检查可用磁盘空间";
+"Edit" = "编辑";
+"Undo" = "撤销";
+"Redo" = "重做";
+"Cut" = "剪切";
+"Copy" = "复制";
+"Select All" = "全选";

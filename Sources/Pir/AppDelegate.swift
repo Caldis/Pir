@@ -102,6 +102,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         submenu.addItem(withTitle: L("Quit Pir"), action: #selector(quit), keyEquivalent: "q").target = self
         item.submenu = submenu
         main.addItem(item)
+        let edit = NSMenu(title: L("Edit"))
+        for (title, selector, key) in [("Undo", "undo:", "z"), ("Redo", "redo:", "Z"),
+                                      ("Cut", "cut:", "x"), ("Copy", "copy:", "c"),
+                                      ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
+            let command = NSMenuItem(title: L(title), action: Selector(selector), keyEquivalent: key.lowercased())
+            command.keyEquivalentModifierMask = key == "Z" ? [.command, .shift] : [.command]
+            edit.addItem(command)
+        }
+        let editItem = NSMenuItem(title: L("Edit"), action: nil, keyEquivalent: "")
+        editItem.submenu = edit
+        main.addItem(editItem)
         NSApp.mainMenu = main
     }
 

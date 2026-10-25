@@ -42,6 +42,11 @@ class KeyPopover: NSObject, NSPopoverDelegate {
         popover = nil
     }
 
+    var isEscapeHintVisible: Bool {
+        guard let hintLabel else { return false }
+        return !hintLabel.isHidden && hintLabel.stringValue == RecordingHint.escape.localizedText
+    }
+
     func showEscHint() {
         showHint(.escape)
     }

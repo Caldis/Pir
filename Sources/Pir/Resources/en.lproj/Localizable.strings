@@ -78,3 +78,9 @@
 "Select and edit text. Drag the top margin to move. Drag any edge to resize." = "Select and edit text. Drag the top margin to move. Drag any edge to resize.";
 "Copy something, then press your shortcut." = "Copy something, then press your shortcut.";
 "Pins could not be saved. Check available disk space." = "Pins could not be saved. Check available disk space.";
+"Edit" = "Edit";
+"Undo" = "Undo";
+"Redo" = "Redo";
+"Cut" = "Cut";
+"Copy" = "Copy";
+"Select All" = "Select All";

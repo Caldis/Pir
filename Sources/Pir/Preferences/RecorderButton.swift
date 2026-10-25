@@ -42,7 +42,8 @@ final class RecorderButton: NSButton {
         }
         NSLayoutConstraint.activate([
             preview.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: style == .onboarding ? -8 : -4),
-            preview.centerYAnchor.constraint(equalTo: centerYAnchor),
+            preview.topAnchor.constraint(equalTo: topAnchor, constant: style == .onboarding ? 8 : 4),
+            preview.bottomAnchor.constraint(equalTo: bottomAnchor, constant: style == .onboarding ? -8 : -4),
             placeholder.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
             placeholder.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
             placeholder.centerYAnchor.constraint(equalTo: centerYAnchor)
@@ -56,7 +57,10 @@ final class RecorderButton: NSButton {
             try model.setHotKey(value)
             onRecorded?()
         }
-        recorder.onStateChange = { [weak model] active in model?.onRecordingChange?(active) }
+        recorder.onStateChange = { [weak model] active in
+            model?.isRecording = active
+            model?.onRecordingChange?(active)
+        }
         update(model.hotKey, enabled: model.hotKeyEnabled)
     }
 

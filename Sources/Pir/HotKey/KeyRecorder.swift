@@ -7,7 +7,7 @@ final class KeyRecorder {
     static let timeout: TimeInterval = 10
     private var monitor: Any?
     private var timer: Timer?
-    private var popover: KeyPopover?
+    private(set) var popover: KeyPopover?
     private var recorded = false
     private var invalidKeyPressCount = 0
     private var observers: [NSObjectProtocol] = []

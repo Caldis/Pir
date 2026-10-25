@@ -22,7 +22,7 @@ final class GlobalHotKeyTests: XCTestCase {
         recorder.start(from: source)
         recorder.recordRegisteredHotKey(.default)
         XCTAssertEqual(recorded, [.default])
-        let preview = try XCTUnwrap(NSApp.windows.filter(\.isVisible).compactMap { findPreview(in: $0.contentView) }.first)
+        let preview = try XCTUnwrap(recorder.popover?.keyPreview)
         preview.window?.displayIfNeeded()
         let key = try XCTUnwrap(preview.arrangedSubviews.first)
         key.displayIfNeeded()
@@ -45,22 +45,18 @@ final class GlobalHotKeyTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         let recorder = KeyRecorder()
         defer { recorder.stop(); window.close() }
-        func hint() throws -> NSTextField {
-            let labels = NSApp.windows.filter(\.isVisible).flatMap { descendants(in: $0.contentView) }
-            return try XCTUnwrap(labels.compactMap { $0 as? NSTextField }
-                .first { $0.stringValue == L("Press Escape to cancel") })
-        }
+        func hint() throws -> KeyPopover { try XCTUnwrap(recorder.popover) }
         recorder.start(from: source)
-        XCTAssertTrue(try hint().isHidden)
+        XCTAssertFalse(try hint().isEscapeHintVisible)
         for _ in 0..<4 { recorder.recordRegisteredHotKey(HotKey(keyCode: 0, modifiers: [])) }
-        XCTAssertTrue(try hint().isHidden)
+        XCTAssertFalse(try hint().isEscapeHintVisible)
         recorder.recordRegisteredHotKey(HotKey(keyCode: 0, modifiers: []))
-        XCTAssertFalse(try hint().isHidden)
+        XCTAssertTrue(try hint().isEscapeHintVisible)
         recorder.stop()
         recorder.start(from: source)
-        XCTAssertTrue(try hint().isHidden)
+        XCTAssertFalse(try hint().isEscapeHintVisible)
         recorder.recordRegisteredHotKey(.default)
-        XCTAssertTrue(try hint().isHidden)
+        XCTAssertFalse(try hint().isEscapeHintVisible)
     }
 
     private func descendants(in view: NSView?) -> [NSView] {

@@ -11,6 +11,7 @@ final class PreferencesModel: ObservableObject {
     @Published var hotKey: HotKey
     @Published var hotKeyEnabled: Bool
     @Published var error: String?
+    var isRecording = false
     var onVisibilityChange: ((Bool) -> Void)?
     var onHotKeyChange: ((HotKey) throws -> Void)?
     var onHotKeyClear: (() -> Void)?

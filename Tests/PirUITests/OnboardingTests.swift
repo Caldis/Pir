@@ -43,6 +43,29 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(pins.summaries.count, 1)
     }
 
+    func testWelcomeShortcutRepeatsAndYieldsDuringRecording() throws {
+        _ = NSApplication.shared
+        let domain = "Pir.OnboardingTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let settings = SettingsStore(defaults: defaults)
+        let model = PreferencesModel(settings: settings, pins: PinManager())
+        let controller = OnboardingWindowController(settings: settings, model: model)
+        var presses = 0
+        controller.onTryShortcut = { _ in presses += 1; return true }
+        controller.present()
+        defer { controller.close() }
+        let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: model.hotKey.modifiers, timestamp: 0, windowNumber: try XCTUnwrap(controller.window).windowNumber,
+            context: nil, characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: model.hotKey.keyCode))
+        XCTAssertNil(controller.handleShortcutEvent(event))
+        XCTAssertNil(controller.handleShortcutEvent(event))
+        XCTAssertEqual(presses, 2)
+        model.isRecording = true
+        XCTAssertNotNil(controller.handleShortcutEvent(event))
+        XCTAssertEqual(presses, 2)
+    }
+
     func testDemoReusesHiddenPinAndRecreatesDeletedPin() throws {
         _ = NSApplication.shared
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

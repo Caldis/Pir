@@ -11,6 +11,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private let model: PreferencesModel
     private let experience = OnboardingExperience()
     private var finishedSession = false
+    private var shortcutMonitor: Any?
     var onFinish: (() -> Void)?
     var onTryShortcut: ((NSScreen?) -> Bool)?
 
@@ -32,6 +33,11 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     func present() {
         finishedSession = false
+        if let shortcutMonitor { NSEvent.removeMonitor(shortcutMonitor) }
+        shortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            return self.handleShortcutEvent(event)
+        }
         experience.hasPinnedLogo = false
         window?.contentViewController = NSHostingController(rootView: OnboardingView(
             model: model, experience: experience,
@@ -46,6 +52,8 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     private func finish() {
         guard !finishedSession else { return }
         finishedSession = true
+        if let shortcutMonitor { NSEvent.removeMonitor(shortcutMonitor) }
+        shortcutMonitor = nil
         settings.hasCompletedOnboarding = true
         close()
         // Releasing the artwork stops its Metal display link.
@@ -54,6 +62,18 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) { finish() }
+
+    func handleShortcutEvent(_ event: NSEvent) -> NSEvent? {
+        guard window?.isVisible == true, event.window === window, !model.isRecording,
+              model.hotKeyEnabled, HotKey(keyCode: event.keyCode, modifiers: event.modifierFlags) == model.hotKey else { return event }
+        // Registered Carbon events are consumed before this app-local fallback reaches AppKit.
+        tryShortcut()
+        return nil
+    }
+
+    deinit {
+        if let shortcutMonitor { NSEvent.removeMonitor(shortcutMonitor) }
+    }
 
     func tryShortcut() {
         guard window?.isVisible == true else { return }
