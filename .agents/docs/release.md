@@ -36,17 +36,18 @@
 
 ## 0.1.0 验证记录
 
-构建编号为 20261025.3, 本机检查执行 44 项 XCTest, 网站构建、静态资源路径与脚本语法检查通过
+构建编号为 20261025.4, 本机检查执行 44 项 XCTest, 网站构建、静态资源路径与脚本语法检查通过
 
 | 项目 | 回读结果 |
 | --- | --- |
 | Universal | x86_64 + arm64, macOS 13+ |
 | 应用签名 | Developer ID Application: BIAO CHEN, N7Z52F27XK, Hardened Runtime |
-| 应用公证 | Accepted, 314bc1f6-a42b-4ad4-9c01-1ad7355b7b94 |
-| DMG 公证 | Accepted, 8548b61d-7d51-4196-8270-b722c1f5e16a |
+| 应用公证 | Accepted, df8b8991-73ef-4d36-b1d4-387c73c485d4 |
+| DMG 公证 | Accepted, 9c47fc6b-81fe-4d74-bbd6-a2c14b3894b9 |
 | 票据与执行评估 | app 与 DMG stapler validate 通过, Gatekeeper accepted / Notarized Developer ID |
 | DMG 完整性 | hdiutil verify 通过, 下载校验使用 Release 的 SHA256SUMS |
 | 入门动画 | 原生窗口捕获描边帧与完成帧, 运行日志在约 4.3 秒后记录 settled |
+| macOS 15 云端检查 | 44 项测试与 Universal 构建通过, 包含文本视口宽度兼容回归 |
 | 会话 | NSPanel 重启回读、隐藏状态、显式删除及恢复失败保留回归通过 |
 
 物理显示器拔插与 macOS 13 实机尚待验证, 当前覆盖屏幕拓扑模型与本机窗口恢复. 未授权辅助功能时, 权限引导继续使用系统设置窗口外框定位; 详细边界见 docs/platform-compatibility.md
