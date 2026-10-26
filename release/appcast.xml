@@ -7,6 +7,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.7</title>
+      <sparkle:version>20261026.9</sparkle:version>
+      <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 26 Oct 2026 08:44:13 +0000</pubDate>
+      <description>&lt;h2&gt;Pir 0.1.7&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;虚线边框的暗色对比仅向外侧扩散, 改善白底上的双线观感&lt;/li&gt;
+&lt;li&gt;窗内图片操作区增加左上留白, 窄窗口保持完整按钮布局&lt;/li&gt;
+&lt;li&gt;多文件网格为系统滚动条保留空间, 默认宽度保持三列&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;English&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Dashed frame contrast extends outward from the white stroke&lt;/li&gt;
+&lt;li&gt;Image controls gain inset spacing and adapt to narrow windows&lt;/li&gt;
+&lt;li&gt;File grids account for scrollbar width and retain three columns at their default size&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.7/Pir.Versions.0.1.7-20261026.9.zip" length="6739412" type="application/octet-stream" sparkle:edSignature="oD7uScCOSAXWdSkE27NLe6aEgGY/Hr8TYjw4RJGEAyVerOSicDm4bo7NuTLhNOC2i4Z+DgCQQHqtgk/bweStAQ=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.6</title>
       <sparkle:version>20261026.8</sparkle:version>
       <sparkle:shortVersionString>0.1.6</sparkle:shortVersionString>
@@ -98,6 +119,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: xJOc9JgRGP3tuEQFiZrjK7X+3+osqQYY4/41HUWLppiUOLsw4kh23knUlr9l4xU77uQ6IAvZh6wQLtoHPRBvAA==
-length: 7440
+edSignature: /cO2G8E9KcH4hV9zOUhZLR9dkAdPpqXpL61uIFBdjy/FHVx8UvwvXlBnnk8R3psEKE1bO7zXWAKWsAyWcNrlBw==
+length: 8727
 -->
