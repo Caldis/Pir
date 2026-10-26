@@ -153,3 +153,29 @@ Limited Review: 桌面自动化未能稳定触发悬停工具条, 完整过渡�
 Limited Review: 桌面自动化对非激活浮窗 hover 和拖动的支持有限, 本轮鼠标操作未取得确定的缩放完成证据. 实际应用证据覆盖图片静态渲染、fit 恢复、管理页与真实升级; 完整悬停观感和应用失活时的鼠标投递仍属有限人工覆盖. 光标事件路由、手势锁定、虚线和图片过渡采用定向回归证据
 
 证据、公开下载、日志和隔离会话归档位于 ~/.config/pir/migration/release-verification/0.1.6/. 隔离会话已归档, 用户偏好与 Keychain 密钥继续保留. 新增图片图层在 CI 的 1x 窗口取整下存在 cover 外扩, 测试采用等比、居中与完整覆盖断言, 对应修正后的功能 CI 通过
+
+
+## 0.1.7 发行验收
+
+2026-10-26 完成正式发行, 显示版本 0.1.7, 构建编号 20261026.9. 功能合并提交为 b09501fbd462f59f24e8ea7a9cc75fdcb34be590, 签名 feed 提交为 d61402501961109ffa57df7a63b8c6c0fb571144
+
+| 范围 | 结果 |
+| --- | --- |
+| Issue 与实施 | Caldis 提交的 #18、#19、#20 完成, PR #21 合入 main; 共享图片源码串行实施, 文件模块独立回归, 聚焦审查完成 |
+| 检查与构建 | 127 项 Swift 测试、5 项 Python 发布工具测试、本地化、网站与脚本检查通过; arm64/x86_64 Universal, 最低 macOS 13, SDK 27 |
+| 图片外观 | 白线外侧暗色对比、四边与圆角、动画起中终点像素、内部透明、120/131/132/360 pt 工具条布局与命中、按钮白色绘制与按压反馈通过回归 |
+| 文件布局 | legacy 与 overlay 滚动条、自然三列、窄窗口降列、移除与视图切换恢复通过 6 项回归; 实际应用确认 304 pt 自然宽度三列、列表切换与竖向滚动条 |
+| 应用公证 | Developer ID Application: BIAO CHEN, Team N7Z52F27XK; Apple Accepted, 提交 bbded082-79c6-4af4-924b-7e4ff4363575, 票据与 Gatekeeper 通过 |
+| DMG 公证 | Apple Accepted, 提交 c0a172e4-9e36-4374-af33-f944db491f24, 票据与镜像校验通过 |
+| 公开发行 | [Pir 0.1.7](https://github.com/Caldis/Pir/releases/tag/0.1.7), 公开 DMG 与 ZIP 的 SHA256 一致, 公开 feed 与仓库逐字节一致 |
+| 独立验签 | 公开 feed 与 ZIP 经应用公钥独立 Ed25519 验签通过; 公开 ZIP 与只读挂载 DMG 内的应用通过签名、票据与 Gatekeeper |
+| 实际更新 | 已安装 0.1.6 / 20261026.8 通过 Sparkle 下载、安装并自动重启到 0.1.7 / 20261026.9, 再次检查显示最新版 |
+| 安装与会话 | 已安装应用的 118 个常规文件与公开 ZIP 一致; 两项图片、隐藏文本与隐藏文件列表的 8 个内容和元数据文件在升级前后一致, 管理页状态回读通过 |
+| CI | 合并提交 [40294273762](https://github.com/Caldis/Pir/actions/runs/40294273762) 与 feed 提交 [40294450633](https://github.com/Caldis/Pir/actions/runs/40294450633) 均成功 |
+| Issue 回读 | #18、#19、#20 均为 closed / completed; 独立 gh 查询的 open 列表为空 |
+
+Limited Review: 桌面自动化对非激活浮窗 hover 的投递支持有限, 完整工具条与虚线过渡观感仍属有限人工覆盖. 实际应用证据覆盖透明图片渲染、文件网格和列表、会话恢复与真实升级; 像素、几何、命中和时序具备定向回归证据
+
+公证 CLI 的既有 notarytool profile 在本轮故障期间持续可用. 签名阶段曾出现 missing Xcode-Username / No Accounts, 账户认证恢复后同一命令行云导出成功. 本地代码签名身份枚举与云签名能力分别记录, 公证凭据与签名认证分别验证
+
+证据、公开下载、日志与本轮隔离会话位于 ~/.config/pir/migration/release-verification/0.1.7/. 预览会话与升级会话分别归档, 用户偏好与既有 Keychain 密钥保留, 已安装正式版恢复常规运行
