@@ -7,6 +7,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.4</title>
+      <sparkle:version>20261026.6</sparkle:version>
+      <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 26 Oct 2026 02:59:25 +0000</pubDate>
+      <description>&lt;h2&gt;Pir 0.1.4&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;修复贴屏移动后的尺寸、位置与显示器归属记忆&lt;/li&gt;
+&lt;li&gt;控制区移至左上, 优化透明图片边缘缩放、圆角阴影、虚线与悬停动画&lt;/li&gt;
+&lt;li&gt;文件贴屏支持相交框选、打开、废纸篓、简介与重命名, 文件引用跨浮窗同步&lt;/li&gt;
+&lt;li&gt;正式启动保持静默, 默认快捷键采用 Shift + Command + V&lt;/li&gt;
+&lt;li&gt;欢迎窗口居中, 开始按钮放大, 烟花位置随机且范围增大&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;English&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Reliable move and display placement persistence&lt;/li&gt;
+&lt;li&gt;Upper-left controls, transparent edge resizing, rounded contrast backgrounds, and hover transitions&lt;/li&gt;
+&lt;li&gt;Finder-style file selection and actions with synchronized references&lt;/li&gt;
+&lt;li&gt;Quiet release launches and a Shift + Command + V default shortcut&lt;/li&gt;
+&lt;li&gt;Centered onboarding, a larger start button, and larger randomized fireworks&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.4/Pir.Versions.0.1.4-20261026.6.zip" length="6708673" type="application/octet-stream" sparkle:edSignature="NWyV+8Dju5NdApbMdHnZPmULNeFVhEEyCv82RzkGcU2C8yTPQIcaZ2hg1thJ8UwfMF+pmRUyw3HRz62BfZFkCQ=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.3</title>
       <sparkle:version>20261026.5</sparkle:version>
       <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
@@ -27,6 +52,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 4EGi+ccfyJGe3As/xWnebgO9Ns63H/5Hj760gj5NZ0njh1dq5AsGYTA8rlKfTUnlPOZXoJ7RQwy6Dtq/xHjFDg==
-length: 2867
+edSignature: +htLNIE5JDp/0rq2X0B0qkjWgS0xaYqKce64Js/xLwLVcnJM75Qy0WTrSugOBXbH9x8n73R1JqHGD+NRsKT/CA==
+length: 4565
 -->
