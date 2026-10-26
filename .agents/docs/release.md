@@ -103,3 +103,28 @@ Limited Review: 真实多显示器断开、透明浮窗拖动和完整悬停动�
 发行证据与隔离会话归档位于 ~/.config/pir/migration/release-verification/0.1.4/, 截图位于 /Users/caldis/.codex/visualizations/2026/10/26/01a17595-51e9-79e3-b92f-0fe6e1f3718f/. 日志为 /tmp/pir-0.1.4-final-check.log、/tmp/pir-0.1.4-build.log、/tmp/pir-finalize-0.1.4.log、/tmp/pir-prepare-0.1.4.log、/tmp/pir-public-0.1.4-verify.log 与 /tmp/pir-public-0.1.4-dmg.log
 
 发行资产为 Pir-0.1.4-universal.dmg、Pir.Versions.0.1.4-20261026.6.zip 与 SHA256SUMS. 隔离验收会话已归档, 用户偏好与 Keychain 密钥继续保留
+
+## 0.1.5 发行验收
+
+2026-10-26 完成正式发行, 显示版本 0.1.5, 构建编号 20261026.7. 功能提交为 1b3715e17f7ee51d4fc25fe6732c6e34506213a9, 签名 feed 提交为 317b3011f8d114190cdc73b5198336474e9a5169
+
+| 范围 | 结果 |
+| --- | --- |
+| Issue 与实施 | Caldis 提交的 #13 至 #15 完成; 浮窗控件串行实施, 持久化与文档并行, 独立只读审查完成 |
+| 本地检查 | scripts/check.sh 通过, 112 项 Swift 测试、5 项 Python 发布测试、113 组原生双语键与网站检查通过 |
+| 构建 | arm64 与 x86_64 Universal, 最低 macOS 13, 链接 SDK 为 27 |
+| 应用公证 | Developer ID Application: BIAO CHEN, Team N7Z52F27XK; Apple Accepted, 提交 41059424-1da3-48a9-a7a1-abe788ee66e9, 票据与 Gatekeeper 通过 |
+| DMG 公证 | Apple Accepted, 提交 7d7484b8-91d3-46f4-bd83-e53520b22e85, 票据与镜像校验通过 |
+| 公开发行 | [Pir 0.1.5](https://github.com/Caldis/Pir/releases/tag/0.1.5), 公开 DMG 与 ZIP 的 SHA256 一致, 公开 feed 与仓库逐字节一致 |
+| 独立验签 | 应用公钥验证公开 feed 与 ZIP 的 Ed25519 签名通过; 公开 ZIP 与只读挂载 DMG 内的应用均通过签名、票据与 Gatekeeper 验证 |
+| 实际更新 | 已安装 0.1.4 / 20261026.6 通过 Sparkle 发现、下载、安装并自动重启至 0.1.5 / 20261026.7, 再次检查显示最新版 |
+| 安装回读 | 已安装应用的 118 个常规文件与公开更新 ZIP 一致 |
+| 会话恢复 | 两项隔离会话保留原有元数据和内容资产; 新元数据增加 imageScaling=cover, 旧格式恢复兼容性通过 |
+| 图片外观 | 实际应用显示 cover 中部裁剪与 fit 完整三色图片, 两次恢复的窗口均为 240 × 240 pt; 缩放模式恢复和再次贴上另有集成回归 |
+| 控件回归 | 关闭优先顺序、复制成功/失败/重复触发/定时恢复、原始图像复制、模式切换与原始 frame、fit 留白边缘 WindowServer 命中均通过 |
+| CI | 功能提交 [40265675396](https://github.com/Caldis/Pir/actions/runs/40265675396) 与 feed 提交 [40265890971](https://github.com/Caldis/Pir/actions/runs/40265890971) 均成功 |
+| Issue 回读 | #13 至 #15 关闭为 completed; 独立 gh issue view/list 回读为 CLOSED, open 列表为空 |
+
+Limited Review: 桌面自动化未能稳定触发悬停工具条, 完整过渡动画的实际观感仍有限. 实际应用证据覆盖 cover 与 fit 的恢复静帧及真实升级, 控件交互与反馈时序使用定向回归证据
+
+证据、公开下载、日志和隔离会话归档位于 ~/.config/pir/migration/release-verification/0.1.5/. 截图位于 /Users/caldis/.codex/visualizations/2026/10/26/01a17595-51e9-79e3-b92f-0fe6e1f3718f/. 定时任务状态位于 ~/.config/pir/issue-monitor/state.json
