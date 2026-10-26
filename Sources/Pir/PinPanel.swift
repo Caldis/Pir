@@ -876,13 +876,18 @@ private final class PinControlButton: NSButton {
 private final class PinControlButtonCell: NSButtonCell {
     override func drawImage(_ image: NSImage, withFrame frame: NSRect, in controlView: NSView) {
         let scale: CGFloat = isHighlighted && isEnabled ? 1.16 : 1
+        let available = controlView.bounds.insetBy(dx: 2, dy: 2).size
+        let fit = min(1, min(available.width / max(1, frame.width), available.height / max(1, frame.height)))
+        let size = NSSize(width: frame.width * fit, height: frame.height * fit)
+        let drawingFrame = NSRect(x: controlView.bounds.midX - size.width / 2,
+                                  y: controlView.bounds.midY - size.height / 2, width: size.width, height: size.height)
         NSGraphicsContext.saveGraphicsState()
         let transform = NSAffineTransform()
-        transform.translateX(by: frame.midX, yBy: frame.midY)
+        transform.translateX(by: drawingFrame.midX, yBy: drawingFrame.midY)
         transform.scale(by: scale)
-        transform.translateX(by: -frame.midX, yBy: -frame.midY)
+        transform.translateX(by: -drawingFrame.midX, yBy: -drawingFrame.midY)
         transform.concat()
-        super.drawImage(image, withFrame: frame, in: controlView)
+        super.drawImage(image, withFrame: drawingFrame, in: controlView)
         NSGraphicsContext.restoreGraphicsState()
     }
 }

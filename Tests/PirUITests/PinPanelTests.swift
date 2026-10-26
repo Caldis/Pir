@@ -873,6 +873,13 @@ final class PinPanelTests: XCTestCase {
                     XCTAssertTrue(backdrop.frame.contains(rect))
                     let center = NSPoint(x: rect.midX, y: rect.midY)
                     XCTAssertTrue(surface.hitTest(surface.convert(center, to: surface.superview)) === button)
+                    if width == 120, mode == .cover {
+                        let normal = try visibleIconArea(of: button)
+                        button.cell?.isHighlighted = true
+                        let pressed = try visibleIconArea(of: button)
+                        button.cell?.isHighlighted = false
+                        XCTAssertGreaterThan(pressed, normal, "Compact controls retain visible press enlargement")
+                    }
                 }
                 let first = try XCTUnwrap(buttons.first)
                 XCTAssertEqual(first.convert(first.bounds, to: surface).minX - backdrop.frame.minX, compact ? 4 : 8)
