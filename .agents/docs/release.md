@@ -45,3 +45,31 @@
 更新界面、GitHub Release feed、独立更新签名与版本策略见 docs/updates.md. scripts/build.sh 嵌入 Sparkle.framework 并签名组件, cloud-sign.sh 与 release.sh 在根应用签名前使用相同发行身份重签组件
 
 Pir 的发行源为 Caldis/Pir. 发布后独立回读应用、镜像、更新 ZIP 与签名 feed, 更新安装结果记录于本文件
+
+## 0.1.3 发行验收
+
+2026-10-26 完成正式发行, 显示版本 0.1.3, 构建编号 20261026.5. 功能提交为 217a9175bda7ab17df86a47941a5b9f07cc7a664, 签名 feed 提交为 7e10bb7c2e3abddd6093bce10b2a69aaed6c4406
+
+| 范围 | 结果 |
+| --- | --- |
+| 本地检查 | scripts/check.sh 通过, 78 项 Swift 测试、5 项 Python 发布测试、双语键与网站检查通过 |
+| Universal 构建 | arm64 与 x86_64, 最低 macOS 13, 两个架构的链接 SDK 为 27 |
+| 应用签名 | Developer ID Application: BIAO CHEN, Team N7Z52F27XK, 严格验签通过 |
+| 应用公证 | Apple Accepted, 提交 5e755cbe-da11-4c01-8b0e-8fd2bc5e8a7f, stapler 与 Gatekeeper 通过 |
+| DMG 公证 | Apple Accepted, 提交 2089a6d7-4fc8-4639-aed0-3a9f62e29490, stapler 与镜像校验通过 |
+| 公开发行 | [Pir 0.1.3](https://github.com/Caldis/Pir/releases/tag/0.1.3), DMG 与更新 ZIP 的公开下载 SHA256 一致 |
+| 更新签名 | 公开 feed 与仓库文件逐字节一致, feed 与 ZIP 经应用公钥独立 Ed25519 验签通过 |
+| 实际更新 | 已安装 0.1.2 / 20261026.4 通过 Sparkle 发现、下载、安装并自动重启至 0.1.3 / 20261026.5 |
+| 安装回读 | 已安装应用的 120 个文件与公开更新 ZIP 一致, 签名、票据与 Gatekeeper 通过, 再次检查显示当前为最新版本 |
+| 会话恢复 | 独立文本、单文件和六文件测试会话的 6 个内容与元数据文件在升级前后一致, 包含尺寸与隐藏状态 |
+| UI 验收 | 贴屏名称、原双方框页签、新空态插图、16 pt 帮助按钮及弹层、文件图标与列表切换、单文件高度、文本与文件材质完成本机回读 |
+| CI | 功能提交 [40250205404](https://github.com/Caldis/Pir/actions/runs/40250205404) 与 feed 提交 [40250360378](https://github.com/Caldis/Pir/actions/runs/40250360378) 均成功 |
+| 官网 | https://caldis.github.io/Pir/ 返回成功, 品牌与下载入口回读通过, latest API 指向 0.1.3 |
+
+公开资产名称为 Pir-0.1.3-universal.dmg 与 Pir.Versions.0.1.3-20261026.5.zip. SHA256SUMS 记录两个固定发行资产, 动态 feed 使用独立签名认证
+
+本机证据位于 ~/.config/pir/migration/release-verification/, 日志位于 /tmp/pir-release-final-check.log、/tmp/pir-release-final-build.log、/tmp/pir-finalize-0.1.3-final.log 与 /tmp/pir-prepare-0.1.3-final.log. 截图位于 /Users/caldis/.codex/visualizations/2026/10/26/01a17595-51e9-79e3-b92f-0fe6e1f3718f/
+
+验收测试会话已归档. 旧应用位于 ~/.config/pir/migration/archived-applications/Puv.app, 原用户数据、迁移备份和 Keychain 密钥保留. 登录项数据库读取超时, 数据库记录保持原状
+
+Limited Review: 文件网格、尺寸、引用持久化、移除保留源文件、拖放 URL writer、透明边界与按钮状态有定向测试; 本次人工交互覆盖视图切换和窗口外观, Finder 拖出与双击打开沿用既有有限验收范围
