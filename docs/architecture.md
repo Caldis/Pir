@@ -97,3 +97,8 @@ FileInfoWindowController 使用公开 URL resourceValues、FileManager 属性与
 欢迎页快捷键外框按键帽自然尺寸加四边 8 pt 留白, 连续试用使用单一屏幕面板叠加烟花, 最多保留四组粒子系统
 
 应用文案使用 en.lproj 与 zh-Hans.lproj 的 Localizable.strings, NSLocalizedString 从模块资源包读取, 语言选择遵循系统与每应用语言设置. scripts/check-localizations.py 检查双语键集合、重复键、空值与静态查找覆盖. 官网使用按键组织的双语 JSON, 默认选择浏览器语言并保存用户切换结果
+
+
+## 图片模式尺寸过渡
+
+PinImageView 在裁剪容器中持有原始 bitmap 图层, cover 与 fit 计算等比显示区域. 图层的 bounds 与 position 使用 0.24 秒 easeInEaseOut 插值, 快速切换读取 presentation 几何接续. 窗口 frame 与复制源图沿用原值, 窗口尺寸变化按当前模式重算图片矩形, 减少动态效果时直接更新

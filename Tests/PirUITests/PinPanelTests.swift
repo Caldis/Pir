@@ -228,10 +228,11 @@ final class PinPanelTests: XCTestCase {
         let content = try XCTUnwrap(panel.contentView)
         content.layoutSubtreeIfNeeded()
         let imageView = try XCTUnwrap(descendant(PinImageView.self, in: content))
-        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspectFill)
+        XCTAssertTrue(imageView.imageLayer.frame.contains(imageView.bounds))
+        XCTAssertEqual(imageView.imageLayer.frame.width / imageView.imageLayer.frame.height, 5, accuracy: 0.001)
         XCTAssertTrue(imageView.layer?.masksToBounds == true)
         XCTAssertEqual(imageView.bounds.size, content.bounds.size)
-        XCTAssertNotNil(imageView.layer?.contents)
+        XCTAssertNotNil(imageView.imageLayer.contents)
         let rendered = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 120, pixelsHigh: 180,
                                        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                        isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
@@ -264,7 +265,8 @@ final class PinPanelTests: XCTestCase {
             XCTAssertEqual(panel.hasShadow, edgeAlpha == 255)
             XCTAssertEqual(panel.contentView?.layer?.cornerRadius, edgeAlpha == 255 ? 10 : 0)
             let imageView = try XCTUnwrap(descendant(PinImageView.self, in: try XCTUnwrap(panel.contentView)))
-            XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspectFill)
+            panel.contentView?.layoutSubtreeIfNeeded()
+            XCTAssertEqual(imageView.imageLayer.frame, imageView.bounds)
         }
     }
 
@@ -546,10 +548,10 @@ final class PinPanelTests: XCTestCase {
         XCTAssertEqual(panel.imageScaling, .cover)
         panel.setImageScaling(.fit, animated: false)
         XCTAssertEqual(panel.imageScaling, .fit)
-        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspect)
+        XCTAssertEqual(imageView.imageLayer.frame, NSRect(x: 0, y: 75, width: 120, height: 30))
         XCTAssertEqual(panel.frame, frame)
         panel.setImageScaling(.cover, animated: false)
-        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspectFill)
+        XCTAssertEqual(imageView.imageLayer.frame, NSRect(x: -300, y: 0, width: 720, height: 180))
         XCTAssertEqual(panel.frame, frame)
         XCTAssertEqual(changes, [.fit, .cover])
         let pasteboard = NSPasteboard.withUniqueName()
@@ -591,6 +593,105 @@ final class PinPanelTests: XCTestCase {
         }
     }
 
+    func testImageModeTransitionResizesGeometryAndRenderedImage() throws {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { throw XCTSkip("Motion is disabled") }
+        let image = try opaqueWideImage()
+        let panel = PinPanel(content: .image(image), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        panel.setFrame(NSRect(x: 100, y: 100, width: 200, height: 200), display: true)
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.layoutSubtreeIfNeeded()
+        let view = try XCTUnwrap(descendant(PinImageView.self, in: surface))
+        let bitmap = try XCTUnwrap(view.imageLayer.contents as AnyObject?)
+        let windowFrame = panel.frame
+        panel.setImageScaling(.fit)
+        let group = try XCTUnwrap(view.imageLayer.animation(forKey: "pin-image-scaling") as? CAAnimationGroup)
+        let size = try XCTUnwrap(group.animations?.compactMap { $0 as? CABasicAnimation }.first { $0.keyPath == "bounds" })
+        let position = try XCTUnwrap(group.animations?.compactMap { $0 as? CABasicAnimation }.first { $0.keyPath == "position" })
+        let fromBounds = try XCTUnwrap(size.fromValue as? NSValue).rectValue
+        let toBounds = try XCTUnwrap(size.toValue as? NSValue).rectValue
+        let fromPosition = try XCTUnwrap(position.fromValue as? NSValue).pointValue
+        let toPosition = try XCTUnwrap(position.toValue as? NSValue).pointValue
+        XCTAssertEqual(fromBounds.size, NSSize(width: 800, height: 200))
+        XCTAssertEqual(toBounds.size, NSSize(width: 200, height: 50))
+        XCTAssertEqual(fromPosition, NSPoint(x: -300, y: 0))
+        XCTAssertEqual(toPosition, NSPoint(x: 0, y: 75))
+        XCTAssertEqual(panel.frame, windowFrame)
+        XCTAssertFalse(group.animations?.compactMap { $0 as? CABasicAnimation }.contains { $0.keyPath == "opacity" } ?? false)
+        view.imageLayer.removeAnimation(forKey: "pin-image-scaling")
+        for (name, fraction) in [("cover", CGFloat(0)), ("middle", CGFloat(0.5)), ("fit", CGFloat(1))] {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            view.imageLayer.bounds = NSRect(x: 0, y: 0,
+                width: fromBounds.width + (toBounds.width - fromBounds.width) * fraction,
+                height: fromBounds.height + (toBounds.height - fromBounds.height) * fraction)
+            view.imageLayer.position = NSPoint(x: fromPosition.x + (toPosition.x - fromPosition.x) * fraction,
+                                               y: fromPosition.y + (toPosition.y - fromPosition.y) * fraction)
+            CATransaction.commit()
+            let rendered = try renderHoverArtwork(view)
+            XCTAssertGreaterThan(rendered.colorAt(x: 100, y: 100)?.alphaComponent ?? 0, 0.95)
+            if fraction == 0 { XCTAssertGreaterThan(rendered.colorAt(x: 100, y: 20)?.alphaComponent ?? 0, 0.95) }
+            else { XCTAssertEqual(rendered.colorAt(x: 100, y: 20)?.alphaComponent, 0) }
+            if fraction < 1 { XCTAssertGreaterThan(rendered.colorAt(x: 100, y: 60)?.alphaComponent ?? 0, 0.95) }
+            else { XCTAssertEqual(rendered.colorAt(x: 100, y: 60)?.alphaComponent, 0) }
+            XCTAssertTrue((view.imageLayer.contents as AnyObject?) === bitmap)
+            XCTAssertEqual(view.imageLayer.opacity, 1)
+            try exportHoverArtwork(rendered, name: "pin-image-resize-" + name)
+        }
+        panel.setFrame(NSRect(x: 100, y: 100, width: 300, height: 180), display: true)
+        surface.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.imageLayer.frame, NSRect(x: 0, y: 52.5, width: 300, height: 75))
+        XCTAssertNil(view.imageLayer.animation(forKey: "pin-image-scaling"))
+    }
+
+    func testImageModeReversalStartsAtPresentedGeometry() throws {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { throw XCTSkip("Motion is disabled") }
+        let panel = PinPanel(content: .image(try opaqueWideImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        panel.setFrame(NSRect(x: 100, y: 100, width: 200, height: 200), display: true)
+        panel.orderFrontRegardless()
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.layoutSubtreeIfNeeded()
+        let view = try XCTUnwrap(descendant(PinImageView.self, in: surface))
+        CATransaction.flush()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        view.imageLayer.speed = 0
+        view.imageLayer.timeOffset = 0
+        panel.setImageScaling(.fit)
+        CATransaction.flush()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.03))
+        let first = try XCTUnwrap(view.imageLayer.animation(forKey: "pin-image-scaling") as? CAAnimationGroup)
+        view.imageLayer.timeOffset = first.duration / 2
+        CATransaction.flush()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        let presented = try XCTUnwrap(view.imageLayer.presentation())
+        let interruptedBounds = presented.bounds
+        let interruptedPosition = presented.position
+        XCTAssertGreaterThan(interruptedBounds.width, 200)
+        XCTAssertLessThan(interruptedBounds.width, 800)
+        panel.setImageScaling(.cover)
+        let reversed = try XCTUnwrap(view.imageLayer.animation(forKey: "pin-image-scaling") as? CAAnimationGroup)
+        let size = try XCTUnwrap(reversed.animations?.compactMap { $0 as? CABasicAnimation }.first { $0.keyPath == "bounds" })
+        let position = try XCTUnwrap(reversed.animations?.compactMap { $0 as? CABasicAnimation }.first { $0.keyPath == "position" })
+        XCTAssertEqual(try XCTUnwrap(size.fromValue as? NSValue).rectValue, interruptedBounds)
+        XCTAssertEqual(try XCTUnwrap(position.fromValue as? NSValue).pointValue, interruptedPosition)
+        XCTAssertEqual(try XCTUnwrap(size.toValue as? NSValue).rectValue.size, NSSize(width: 800, height: 200))
+        XCTAssertEqual(view.imageLayer.opacity, 1)
+        panel.setImageScaling(.fit, animated: false)
+        XCTAssertNil(view.imageLayer.animation(forKey: "pin-image-scaling"))
+        XCTAssertEqual(view.imageLayer.frame, NSRect(x: 0, y: 75, width: 200, height: 50))
+    }
+
+    private func opaqueWideImage() throws -> NSImage {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 100,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.bitmapData?.initialize(repeating: 255, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        let image = NSImage(size: NSSize(width: 400, height: 100))
+        image.addRepresentation(bitmap)
+        return image
+    }
+
     func testRestoredImageModeInitializesWithoutChangingSavedFrame() throws {
         let saved = NSRect(x: 100, y: 100, width: 140, height: 180)
         let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0,
@@ -599,7 +700,8 @@ final class PinPanelTests: XCTestCase {
         XCTAssertEqual(panel.frame, saved)
         XCTAssertEqual(panel.imageScaling, .fit)
         let imageView = try XCTUnwrap(descendant(PinImageView.self, in: try XCTUnwrap(panel.contentView)))
-        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspect)
+        panel.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(imageView.imageLayer.frame, NSRect(x: 0, y: 48, width: 140, height: 84))
     }
 
     private func toolbarButtons(in panel: PinPanel) throws -> [NSButton] {

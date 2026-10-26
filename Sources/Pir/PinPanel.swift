@@ -952,21 +952,28 @@ private final class PinControlsBackdrop: NSView {
 
 final class PinImageView: NSView {
     let hasTransparentEdges: Bool
+    let imageLayer = CALayer()
     private let imageSize: NSSize
+    private var scaling: PinImageScaling
+    private var layoutSize: NSSize?
 
     init(image: NSImage, scaling: PinImageScaling = .cover) {
         imageSize = image.size
+        self.scaling = scaling
         let bitmap = image.representations.compactMap { ($0 as? NSBitmapImageRep)?.cgImage }.first
             ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         hasTransparentEdges = bitmap.map(PinImageAppearance.hasTransparentEdges(in:)) ?? true
         super.init(frame: .zero)
         wantsLayer = true
-        // Use the retained bitmap directly; resolving NSImage at a large point size can upscale it.
-        layer?.contents = bitmap
-        layer?.contentsGravity = scaling == .cover ? .resizeAspectFill : .resizeAspect
         layer?.masksToBounds = true
-        layer?.minificationFilter = .trilinear
-        layer?.magnificationFilter = .linear
+        // The bitmap remains unchanged while its image rectangle interpolates inside the clipping view.
+        imageLayer.name = "pin-image-content"
+        imageLayer.anchorPoint = .zero
+        imageLayer.contents = bitmap
+        imageLayer.contentsGravity = .resize
+        imageLayer.minificationFilter = .trilinear
+        imageLayer.magnificationFilter = .linear
+        layer?.addSublayer(imageLayer)
     }
 
     func hasLetterboxing(in size: NSSize) -> Bool {
@@ -975,18 +982,55 @@ final class PinImageView: NSView {
         return size.width - imageSize.width * scale > 0.5 || size.height - imageSize.height * scale > 0.5
     }
 
+    override func layout() {
+        super.layout()
+        guard layoutSize != bounds.size else { return }
+        updateImageGeometry(animated: false)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        guard layoutSize != bounds.size else { return }
+        updateImageGeometry(animated: false)
+    }
+
     func setScaling(_ scaling: PinImageScaling, animated: Bool) {
-        if animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            let transition = CATransition()
-            transition.type = .fade
-            transition.duration = 0.20
-            transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            layer?.add(transition, forKey: "pin-image-scaling")
-        } else { layer?.removeAnimation(forKey: "pin-image-scaling") }
+        superview?.layoutSubtreeIfNeeded()
+        self.scaling = scaling
+        updateImageGeometry(animated: animated)
+    }
+
+    private func updateImageGeometry(animated: Bool) {
+        layoutSize = bounds.size
+        guard imageSize.width > 0, imageSize.height > 0 else { return }
+        let horizontal = bounds.width / imageSize.width
+        let vertical = bounds.height / imageSize.height
+        let scale = scaling == .cover ? max(horizontal, vertical) : min(horizontal, vertical)
+        let targetSize = NSSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let targetBounds = NSRect(origin: .zero, size: targetSize)
+        let targetPosition = NSPoint(x: bounds.midX - targetSize.width / 2, y: bounds.midY - targetSize.height / 2)
+        let presented = imageLayer.presentation()
+        let previousBounds = presented?.bounds ?? imageLayer.bounds
+        let previousPosition = presented?.position ?? imageLayer.position
+        imageLayer.removeAnimation(forKey: "pin-image-scaling")
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer?.contentsGravity = scaling == .cover ? .resizeAspectFill : .resizeAspect
+        imageLayer.bounds = targetBounds
+        imageLayer.position = targetPosition
         CATransaction.commit()
+        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+              previousBounds != targetBounds || previousPosition != targetPosition else { return }
+        let sizeAnimation = CABasicAnimation(keyPath: "bounds")
+        sizeAnimation.fromValue = NSValue(rect: previousBounds)
+        sizeAnimation.toValue = NSValue(rect: targetBounds)
+        let positionAnimation = CABasicAnimation(keyPath: "position")
+        positionAnimation.fromValue = NSValue(point: previousPosition)
+        positionAnimation.toValue = NSValue(point: targetPosition)
+        let group = CAAnimationGroup()
+        group.animations = [sizeAnimation, positionAnimation]
+        group.duration = 0.24
+        group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        imageLayer.add(group, forKey: "pin-image-scaling")
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
