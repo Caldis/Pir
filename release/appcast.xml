@@ -7,6 +7,16 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.3</title>
+      <sparkle:version>20261026.5</sparkle:version>
+      <sparkle:shortVersionString>0.1.3</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 26 Oct 2026 00:38:14 +0000</pubDate>
+      <description>&lt;h2&gt;Pir 0.1.3&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;文件图标放大并紧凑排列, 窗口高度按内容适配&lt;/li&gt;&lt;li&gt;文本与文件浮窗采用毛玻璃背景, 文件浮窗隐藏复制按钮, 文本复制图标缩小&lt;/li&gt;&lt;li&gt;恢复悬停按钮的径向阴影, 透明图片保留虚线边界&lt;/li&gt;&lt;li&gt;贴屏页采用混合内容空态插图, 快捷键帮助按钮缩小, 状态栏图标与应用 Logo 一致&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Larger file icons with compact spacing and content-sized windows. Text and file pins use a translucent material. Refined hover controls, a mixed-content empty state, a smaller help button, and a menu bar icon matching the app logo.&lt;/p&gt;
+</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.3/Pir.Versions.0.1.3-20261026.5.zip" length="6587988" type="application/octet-stream" sparkle:edSignature="QHPG/vOBFyHTKhcoz7UhP9fTAJGoHsHciG3BILBPUXtOgAgEHKjjUSOq7iTQnPCi08qiDRVjS5/tA7GGFDuIDQ=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.2</title>
       <sparkle:version>20261026.4</sparkle:version>
       <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
@@ -17,6 +27,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: lHAW8zdhsVA5f6aH/uRSNBDKcUdw/pDnz9i31GAoJ1pFs5L/EKrFX1qiUNrIlZ7d1z9FlZSiYBufKaNK3cmrCA==
-length: 1526
+edSignature: 4EGi+ccfyJGe3As/xWnebgO9Ns63H/5Hj760gj5NZ0njh1dq5AsGYTA8rlKfTUnlPOZXoJ7RQwy6Dtq/xHjFDg==
+length: 2867
 -->
