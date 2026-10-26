@@ -48,7 +48,7 @@ PinImageScaling 定义 cover 和 fit, PinImageView 使用独立 bitmap 图层的
 
 进入、离开与移动事件采用 activeAlways tracking area, cursorUpdate 采用独立的 activeInActiveApp tracking area. 鼠标进入时根据实际命中位置立即应用缩放光标. Apple 的 [activeAlways 文档](https://developer.apple.com/documentation/appkit/nstrackingarea/options-swift.struct/activealways) 说明该选项与 cursorUpdate 同时使用时抑制 cursorUpdate(with:) 消息, 两个 tracking area 分别承担悬停状态与活动应用内的光标更新
 
-图片与文本的复制图标高度为 13 pt. 文件图标采用 56 pt 尺寸, 固定网格间距为 8 pt, 余量留在行末. PinFileSizing 按文件数量、视图模式和可用屏幕计算新建与复原尺寸; 单行图标窗口高度为 152 pt, 单行列表高度为 90 pt. 切换视图与移除引用后重新适配高度, 手动缩放及会话恢复采用保存尺寸
+图片与文本的复制图标高度为 13 pt. 文件图标采用 56 pt 尺寸, 固定网格间距为 8 pt, 余量留在行末. PinFileSizing 按文件数量、视图模式和可用屏幕计算新建与复原尺寸, NSScrollView 的 frame/content 换算提供实际滚动条占宽. 多文件自然尺寸在需要竖向滚动时补充 legacy 占宽, overlay 与手动宽度按实际 viewport 计算列数. clip view 尺寸变化触发布局更新, 移除文件或切换模式后根据无滚动条候选布局的实际高度释放旧滚动条状态; 单行图标窗口高度为 152 pt, 单行列表高度为 90 pt. 切换视图与移除引用后重新适配高度, 手动缩放及会话恢复采用保存尺寸
 
 文本与文件浮窗的底层复用 PreferencesStyle 的 NSVisualEffectView, 材质为 toolTip, 混合模式为 behindWindow. 滚动视图、裁剪视图与文本视图使用透明背景, 文本颜色跟随系统外观
 

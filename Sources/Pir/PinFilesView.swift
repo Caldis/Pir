@@ -11,6 +11,7 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
     private let scroll = NSScrollView()
     private let actions: FilePinActions
     private var referenceObserver: Any?
+    private var viewportObserver: Any?
     private var infoWindows: [URL: FileInfoWindowController] = [:]
     private var isRecycling = false
     private let modes = NSSegmentedControl(images: [
@@ -49,6 +50,8 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
         collection.onCopy = { [weak self] in self?.copySelection() }
         scroll.documentView = collection
         scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.borderType = .noBorder
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.contentView.drawsBackground = false
@@ -64,6 +67,9 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
             scroll.topAnchor.constraint(equalTo: topAnchor, constant: 42),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
         ])
+        scroll.contentView.postsFrameChangedNotifications = true
+        viewportObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification,
+            object: scroll.contentView, queue: .main) { [weak self] _ in self?.updateFlow() }
         referenceObserver = NotificationCenter.default.addObserver(forName: FilePinReferenceChange.notification, object: nil, queue: .main) { [weak self] note in
             guard let change = note.object as? FilePinReferenceChange else { return }
             self?.apply(change)
@@ -73,6 +79,7 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
 
     deinit {
         if let referenceObserver { NotificationCenter.default.removeObserver(referenceObserver) }
+        if let viewportObserver { NotificationCenter.default.removeObserver(viewportObserver) }
         for controller in infoWindows.values { controller.close() }
     }
 
@@ -124,6 +131,7 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
         flow.mode = content.layout
         flowViewport = scroll.contentSize
         flow.invalidateLayout()
+        collection.needsLayout = true
     }
 
     private func openFile(at index: Int) {
@@ -266,19 +274,24 @@ private final class FileGridLayout: NSCollectionViewLayout {
     override func prepare() {
         super.prepare()
         guard let collectionView else { return }
-        let viewport = collectionView.enclosingScrollView?.contentSize ?? collectionView.bounds.size
+        let count = collectionView.numberOfSections > 0 ? collectionView.numberOfItems(inSection: 0) : 0
+        let viewport: NSSize
+        if let scroll = collectionView.enclosingScrollView {
+            viewport = PinFileSizing.layoutViewport(actual: scroll.contentSize, scrollFrame: scroll.frame.size,
+                style: scroll.scrollerStyle, autohidesScrollers: scroll.autohidesScrollers, count: count, layout: mode)
+        } else { viewport = collectionView.bounds.size }
         let columns = mode == .list ? 1 : PinFileSizing.columns(contentWidth: viewport.width)
         let item = mode == .list ? NSSize(width: max(1, viewport.width - 8), height: PinFileSizing.listRowHeight) : PinFileSizing.itemSize
         let gap = mode == .list ? 4.0 : PinFileSizing.spacing
-        let count = collectionView.numberOfSections > 0 ? collectionView.numberOfItems(inSection: 0) : 0
         attributes = (0..<count).map { index in
             let value = NSCollectionViewLayoutAttributes(forItemWith: IndexPath(item: index, section: 0))
-            value.frame = NSRect(x: 4 + CGFloat(index % columns) * (item.width + gap),
-                                 y: 4 + CGFloat(index / columns) * (item.height + gap),
+            value.frame = NSRect(x: PinFileSizing.contentInset + CGFloat(index % columns) * (item.width + gap),
+                                 y: PinFileSizing.contentInset + CGFloat(index / columns) * (item.height + gap),
                                  width: item.width, height: item.height)
             return value
         }
-        size = NSSize(width: viewport.width, height: max(viewport.height, (attributes.last?.frame.maxY ?? 0) + 4))
+        size = NSSize(width: viewport.width, height: max(viewport.height,
+            PinFileSizing.documentHeight(count: count, layout: mode, viewportWidth: viewport.width)))
     }
 
     override var collectionViewContentSize: NSSize { size }
