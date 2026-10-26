@@ -266,7 +266,12 @@ final class PinPanelTests: XCTestCase {
             XCTAssertEqual(panel.contentView?.layer?.cornerRadius, edgeAlpha == 255 ? 10 : 0)
             let imageView = try XCTUnwrap(descendant(PinImageView.self, in: try XCTUnwrap(panel.contentView)))
             panel.contentView?.layoutSubtreeIfNeeded()
-            XCTAssertEqual(imageView.imageLayer.frame, imageView.bounds)
+            let imageFrame = imageView.imageLayer.frame
+            XCTAssertGreaterThanOrEqual(imageFrame.width + 0.001, imageView.bounds.width)
+            XCTAssertGreaterThanOrEqual(imageFrame.height + 0.001, imageView.bounds.height)
+            XCTAssertEqual(imageFrame.width / imageFrame.height, 1.6, accuracy: 0.001)
+            XCTAssertEqual(imageFrame.midX, imageView.bounds.midX, accuracy: 0.001)
+            XCTAssertEqual(imageFrame.midY, imageView.bounds.midY, accuracy: 0.001)
         }
     }
 
