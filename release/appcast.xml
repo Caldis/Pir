@@ -1,2 +1,22 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><title>Pir</title><link>https://caldis.github.io/Pir/</link><description>Pir Updates</description><language>en</language></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Pir</title>
+    <link>https://caldis.github.io/Pir/</link>
+    <description>Pir Updates</description>
+    <language>en</language>
+    <item>
+      <title>Pir 0.1.2</title>
+      <sparkle:version>20261026.4</sparkle:version>
+      <sparkle:shortVersionString>0.1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 26 Oct 2026 00:21:49 +0000</pubDate>
+      <description>&lt;h2&gt;Pir 0.1.2&lt;/h2&gt;&lt;p&gt;图片、可编辑文本和文件随手贴屏. 支持中英文、图标与列表文件视图、双击打开、原生文件拖拽和会话恢复.&lt;/p&gt;&lt;p&gt;Pin images, editable notes and files. Includes English and Chinese, file views, native drag and drop, persistent sessions and signed updates.&lt;/p&gt;</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.2/Pir.Versions.0.1.2-20261026.4.zip" length="6578894" type="application/octet-stream" sparkle:edSignature="X3R659+mXQc8stfTy3WrKp/js+GbXkb8g7YXIqRNsyxElmxOw8nhysX0qF/Hm1HmLMinBzbADK+Px8eyw+0SDw=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: lHAW8zdhsVA5f6aH/uRSNBDKcUdw/pDnz9i31GAoJ1pFs5L/EKrFX1qiUNrIlZ7d1z9FlZSiYBufKaNK3cmrCA==
+length: 1526
+-->
