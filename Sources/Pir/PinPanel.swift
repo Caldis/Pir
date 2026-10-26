@@ -874,21 +874,32 @@ private final class PinControlButton: NSButton {
 }
 
 private final class PinControlButtonCell: NSButtonCell {
+    private var tintSource: NSImage?
+    private var whiteSymbol: NSImage?
+
     override func drawImage(_ image: NSImage, withFrame frame: NSRect, in controlView: NSView) {
+        // NSButtonCell derives highlighted template images differently across macOS releases.
+        let source = self.image ?? image
+        guard source.size.width > 0, source.size.height > 0 else { return }
+        if tintSource !== source {
+            tintSource = source
+            whiteSymbol = NSImage(size: source.size, flipped: false) { rect in
+                source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1,
+                            respectFlipped: true, hints: nil)
+                NSColor.white.setFill()
+                rect.fill(using: .sourceIn)
+                return true
+            }
+        }
         let scale: CGFloat = isHighlighted && isEnabled ? 1.16 : 1
         let available = controlView.bounds.insetBy(dx: 2, dy: 2).size
-        let fit = min(1, min(available.width / max(1, frame.width), available.height / max(1, frame.height)))
-        let size = NSSize(width: frame.width * fit, height: frame.height * fit)
+        let fit = min(1, min(available.width / source.size.width, available.height / source.size.height))
+        let size = NSSize(width: source.size.width * fit * scale, height: source.size.height * fit * scale)
         let drawingFrame = NSRect(x: controlView.bounds.midX - size.width / 2,
                                   y: controlView.bounds.midY - size.height / 2, width: size.width, height: size.height)
-        NSGraphicsContext.saveGraphicsState()
-        let transform = NSAffineTransform()
-        transform.translateX(by: drawingFrame.midX, yBy: drawingFrame.midY)
-        transform.scale(by: scale)
-        transform.translateX(by: -drawingFrame.midX, yBy: -drawingFrame.midY)
-        transform.concat()
-        super.drawImage(image, withFrame: drawingFrame, in: controlView)
-        NSGraphicsContext.restoreGraphicsState()
+        whiteSymbol?.draw(in: drawingFrame, from: .zero, operation: .sourceOver,
+                          fraction: isEnabled ? 1 : 0.5, respectFlipped: true,
+                          hints: [.interpolation: NSImageInterpolation.high.rawValue])
     }
 }
 

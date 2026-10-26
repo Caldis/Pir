@@ -333,7 +333,7 @@ final class PinPanelTests: XCTestCase {
             button.cell?.isHighlighted = true
             let pressedArea = try visibleIconArea(of: button)
             button.cell?.isHighlighted = false
-            XCTAssertGreaterThan(pressedArea, normalArea, "Press feedback should enlarge the icon")
+            XCTAssertGreaterThan(pressedArea, normalArea, "Press feedback should enlarge \(button.identifier?.rawValue ?? "button")")
             XCTAssertEqual(button.frame, originalFrame)
         }
         surface.setHovered(false)
@@ -878,7 +878,7 @@ final class PinPanelTests: XCTestCase {
                         button.cell?.isHighlighted = true
                         let pressed = try visibleIconArea(of: button)
                         button.cell?.isHighlighted = false
-                        XCTAssertGreaterThan(pressed, normal, "Compact controls retain visible press enlargement")
+                        XCTAssertGreaterThan(pressed, normal, "Compact controls retain visible press enlargement for \(button.identifier?.rawValue ?? "button")")
                     }
                 }
                 let first = try XCTUnwrap(buttons.first)
@@ -1108,11 +1108,17 @@ final class PinPanelTests: XCTestCase {
         let bitmap = try XCTUnwrap(button.bitmapImageRepForCachingDisplay(in: button.bounds))
         button.cacheDisplay(in: button.bounds, to: bitmap)
         var count = 0
+        var minimumWhite: CGFloat = 1
         for y in 0..<bitmap.pixelsHigh {
             for x in 0..<bitmap.pixelsWide {
-                if let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.5 { count += 1 }
+                if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB), color.alphaComponent > 0.5 {
+                    count += 1
+                    minimumWhite = min(minimumWhite, color.redComponent, color.greenComponent, color.blueComponent)
+                }
             }
         }
+        XCTAssertGreaterThanOrEqual(minimumWhite, 0.95,
+            "White symbol tint: \(button.identifier?.rawValue ?? "button"), highlighted=\(button.cell?.isHighlighted ?? false)")
         return count
     }
 }
