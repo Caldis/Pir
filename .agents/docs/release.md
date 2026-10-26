@@ -73,3 +73,33 @@ Pir 的发行源为 Caldis/Pir. 发布后独立回读应用、镜像、更新 ZI
 验收测试会话已归档. 旧应用位于 ~/.config/pir/migration/archived-applications/Puv.app, 原用户数据、迁移备份和 Keychain 密钥保留. 登录项数据库读取超时, 数据库记录保持原状
 
 Limited Review: 文件网格、尺寸、引用持久化、移除保留源文件、拖放 URL writer、透明边界与按钮状态有定向测试; 本次人工交互覆盖视图切换和窗口外观, Finder 拖出与双击打开沿用既有有限验收范围
+
+## 0.1.4 发行验收
+
+2026-10-26 完成正式发行, 显示版本 0.1.4, 构建编号 20261026.6. 功能提交为 0b08460b1f6f608e3db3ed791411f5a6134e50a3, 签名 feed 提交为 7c4a4867d2b1c52199908a9d0577ffa519a6a63d
+
+| 范围 | 结果 |
+| --- | --- |
+| Issue 审计 | 全量读取 #1 至 #12 及评论, 作者均为 Caldis; 依赖与文件边界记录于 docs/plans/2026-10-26-issues-1-12.md |
+| 子代理 | 浮窗几何与欢迎页并行实施, 同模块按依赖串行; 主 agent 实施文件交互并统一验证与发行 |
+| 本地检查 | scripts/check.sh 通过, 104 项 Swift 测试、5 项 Python 发布测试、双语资源与网站检查通过 |
+| Universal 构建 | arm64 与 x86_64, 最低 macOS 13, 两个架构的链接 SDK 为 27 |
+| 应用签名 | Developer ID Application: BIAO CHEN, Team N7Z52F27XK, 严格验签通过 |
+| 应用公证 | Apple Accepted, 提交 9b6c7b88-f926-4b14-b14c-dd72775bb27c, stapler 与 Gatekeeper 通过 |
+| DMG 公证 | Apple Accepted, 提交 3ddf19bb-67ad-4439-9f64-7b42adfa98b4, 票据与镜像校验通过 |
+| 公开发行 | [Pir 0.1.4](https://github.com/Caldis/Pir/releases/tag/0.1.4), DMG 与更新 ZIP 的公开下载 SHA256 一致 |
+| 更新签名 | 公开 feed 与仓库文件逐字节一致, feed 与 ZIP 经应用公钥独立 Ed25519 验签通过 |
+| 公开 DMG | 下载后只读挂载, 镜像内应用的严格验签、票据与 Gatekeeper 通过 |
+| 实际更新 | 已安装 0.1.3 / 20261026.5 通过 Sparkle 发现、下载、安装并自动重启至 0.1.4 / 20261026.6 |
+| 安装回读 | 已安装应用的 118 个常规文件与公开更新 ZIP 一致, 签名、票据与 Gatekeeper 通过; 再次检查显示当前为最新版本 |
+| 会话恢复 | 四项隔离会话的 8 个内容与元数据文件在更新前后一致, 覆盖文本、文件、透明图片、欢迎 Logo 及隐藏状态 |
+| UI 验收 | 文件相交框选与选中态、右键菜单、隔离文件改名与废纸篓、原生简介、默认 Shift + Command + V、欢迎大按钮与连续试用完成本机回读 |
+| 透明输入 | WindowServer 边缘命中测试通过; 同步条件下 alpha 0 对照失败, 1/255 输入环通过 |
+| CI | 功能提交 [40261692910](https://github.com/Caldis/Pir/actions/runs/40261692910) 与 feed 提交 [40261844493](https://github.com/Caldis/Pir/actions/runs/40261844493) 均成功 |
+| 官网与 issue | 官网品牌和下载入口回读通过, latest API 指向 0.1.4, #1 至 #12 独立回读均为 closed / completed |
+
+Limited Review: 真实多显示器断开、透明浮窗拖动和完整悬停动效的人工观察仍有限. 桌面自动化在透明浮窗拖动时返回 noWindowsAvailable, 文件原生移动操作未取得确定的手势完成证据. 移动通知、手势结束复位、临时迁移、最小尺寸、边缘命中、按钮布局与动画终态具备回归测试; 烟花随机区域、三倍规格、资源上限及减少动态效果具备定向测试. 这些测试分别提供对应机制的证据
+
+发行证据与隔离会话归档位于 ~/.config/pir/migration/release-verification/0.1.4/, 截图位于 /Users/caldis/.codex/visualizations/2026/10/26/01a17595-51e9-79e3-b92f-0fe6e1f3718f/. 日志为 /tmp/pir-0.1.4-final-check.log、/tmp/pir-0.1.4-build.log、/tmp/pir-finalize-0.1.4.log、/tmp/pir-prepare-0.1.4.log、/tmp/pir-public-0.1.4-verify.log 与 /tmp/pir-public-0.1.4-dmg.log
+
+发行资产为 Pir-0.1.4-universal.dmg、Pir.Versions.0.1.4-20261026.6.zip 与 SHA256SUMS. 隔离验收会话已归档, 用户偏好与 Keychain 密钥继续保留
