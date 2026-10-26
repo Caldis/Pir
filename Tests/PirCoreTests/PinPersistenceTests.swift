@@ -59,6 +59,28 @@ final class PinPersistenceTests: XCTestCase {
         XCTAssertEqual(PinDisplay.best(for: CGRect(x: -200, y: 100, width: 600, height: 300), among: [right, left])?.id, "right")
     }
 
+    func testRestoringCompactTextRetainsItsContentSpecificMinimumHeight() throws {
+        let display = PinDisplay(id: "main", visibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 900))
+        let frame = CGRect(x: 200, y: 300, width: 160, height: 54)
+        let anchor = PinAnchor(frame: frame, display: display)
+        let placement = try XCTUnwrap(anchor.resolve(displays: [display], fallbackDisplayID: display.id,
+                                                     minimum: CGSize(width: 120, height: 54)))
+        XCTAssertEqual(placement.frame, frame)
+    }
+
+    func testMovingAcrossDisplaysChangesOwnershipAndRestoresMovedPosition() throws {
+        let left = PinDisplay(id: "left", visibleFrame: CGRect(x: -1200, y: 0, width: 1200, height: 900))
+        let right = PinDisplay(id: "right", visibleFrame: CGRect(x: 0, y: 0, width: 1200, height: 900))
+        let initial = CGRect(x: -900, y: 300, width: 400, height: 250)
+        let moved = CGRect(x: 350, y: 180, width: 400, height: 250)
+        let anchor = PinAnchor(frame: initial, display: left).updatedByUser(frame: moved, previousFrame: initial, displays: [left, right])
+        XCTAssertEqual(anchor.displayID, right.id)
+        let placement = try XCTUnwrap(anchor.resolve(displays: [left, right], fallbackDisplayID: left.id))
+        XCTAssertEqual(placement.frame.minX, moved.minX, accuracy: 0.001)
+        XCTAssertEqual(placement.frame.minY, moved.minY, accuracy: 0.001)
+        XCTAssertEqual(placement.frame.size, moved.size)
+    }
+
     func testSessionRoundTripPreservesTextAndMetadataWithPrivatePermissions() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

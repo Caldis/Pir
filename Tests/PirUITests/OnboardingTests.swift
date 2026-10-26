@@ -5,6 +5,56 @@ import PirCore
 
 @MainActor
 final class OnboardingTests: XCTestCase {
+    func testCompletedReleaseLaunchStaysQuietWhileDebugAndHiddenIconLaunchExposePreferences() {
+        XCTAssertEqual(AppLaunchPolicy.presentation(hasCompletedOnboarding: true, isLoginLaunch: false,
+            isDebugBuild: false, statusItemHidden: false), .none)
+        XCTAssertEqual(AppLaunchPolicy.presentation(hasCompletedOnboarding: true, isLoginLaunch: false,
+            isDebugBuild: true, statusItemHidden: false), .preferences)
+        XCTAssertEqual(AppLaunchPolicy.presentation(hasCompletedOnboarding: true, isLoginLaunch: false,
+            isDebugBuild: false, statusItemHidden: true), .preferences)
+        for completed in [false, true] {
+            XCTAssertEqual(AppLaunchPolicy.presentation(hasCompletedOnboarding: completed, isLoginLaunch: true,
+                isDebugBuild: true, statusItemHidden: true), .none)
+        }
+        XCTAssertEqual(AppLaunchPolicy.presentation(hasCompletedOnboarding: false, isLoginLaunch: false,
+            isDebugBuild: false, statusItemHidden: false), .onboarding)
+    }
+
+    func testWelcomeFrameCentersInAvailableScreenAndRecentersOnAnotherScreen() throws {
+        _ = NSApplication.shared
+        let domain = "Pir.OnboardingTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let settings = SettingsStore(defaults: defaults)
+        let model = PreferencesModel(settings: settings, pins: PinManager())
+        let controller = OnboardingWindowController(settings: settings, model: model)
+        let window = try XCTUnwrap(controller.window)
+        for screen in [NSRect(x: 0, y: 70, width: 1440, height: 806),
+                       NSRect(x: -1920, y: -300, width: 1920, height: 1055)] {
+            controller.center(on: screen)
+            XCTAssertEqual(window.frame.midX, screen.midX, accuracy: 0.5)
+            XCTAssertEqual(window.frame.midY, screen.midY, accuracy: 0.5)
+        }
+    }
+
+    func testFireworksSampleNewPositionsAndUseLargerParticlesAndSpread() throws {
+        let first = FireworkBurst(randomValue: { $0.lowerBound })
+        let second = FireworkBurst(randomValue: { $0.upperBound })
+        XCTAssertEqual(first.systems.count, 4)
+        XCTAssertEqual(second.systems.count, 4)
+        XCTAssertGreaterThanOrEqual(OnboardingFireworks.particleDiameter, 84)
+        for (a, b) in zip(first.systems, second.systems) {
+            XCTAssertNotEqual(a.position, b.position)
+            for system in [a, b] {
+                XCTAssertTrue((0...1).contains(system.position.x))
+                XCTAssertTrue((0...1).contains(system.position.y))
+                let explosion = try XCTUnwrap(system.secondarySystems.first { $0.spawnOccasion == .onDeath })
+                XCTAssertGreaterThanOrEqual(explosion.speed, 0.54)
+                XCTAssertEqual(explosion.emissionLimit, 130)
+            }
+        }
+    }
+
     func testShortcutOutlineFitsKeycapsWithEqualPaddingAndAdaptsToCombination() throws {
         _ = NSApplication.shared
         let domain = "Pir.OnboardingTests.\(UUID().uuidString)"
@@ -40,6 +90,7 @@ final class OnboardingTests: XCTestCase {
         let panel = try XCTUnwrap(demo.celebrationPanel)
         for _ in 0..<12 { try demo.showLogo(on: NSScreen.main) }
         XCTAssertTrue(demo.celebrationPanel === panel)
+        XCTAssertEqual(demo.activeCelebrationBurstCount, 4)
         XCTAssertEqual(pins.summaries.count, 1)
     }
 

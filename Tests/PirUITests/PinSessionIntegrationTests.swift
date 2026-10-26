@@ -41,6 +41,83 @@ final class PinSessionIntegrationTests: XCTestCase {
         XCTAssertTrue(try store.load().isEmpty)
     }
 
+    func testNativeMoveNotificationPersistsWithoutExplicitGestureCompletion() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PinSessionStore(root: root)
+        let first = PinManager(store: store)
+        try first.show(.text("Move only"))
+        let panel = try XCTUnwrap(visiblePins().first)
+        let moved = panel.frame.offsetBy(dx: 45, dy: -40)
+        let willMove = Notification(name: NSWindow.willMoveNotification, object: panel)
+        let didMove = Notification(name: NSWindow.didMoveNotification, object: panel)
+        panel.windowWillMove(willMove)
+        panel.setFrame(moved, display: true)
+        panel.windowDidMove(didMove)
+        first.flushSession()
+        first.closeAll()
+        let second = PinManager(store: store)
+        defer { second.closeAll() }
+        second.restoreSession()
+        second.flushSession()
+        let restored = try XCTUnwrap(visiblePins().first)
+        XCTAssertEqual(restored.frame.minX, moved.minX, accuracy: 0.01)
+        XCTAssertEqual(restored.frame.minY, moved.minY, accuracy: 0.01)
+        XCTAssertEqual(restored.frame.size, moved.size)
+    }
+
+    func testProgrammaticDisplayMoveDoesNotRewriteSavedAnchor() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PinSessionStore(root: root)
+        let manager = PinManager(store: store)
+        defer { manager.closeAll() }
+        try manager.show(.text("Display migration"))
+        manager.flushSession()
+        let original = try XCTUnwrap(store.load().first?.record.anchor)
+        let panel = try XCTUnwrap(visiblePins().first)
+        panel.windowWillMove(Notification(name: NSWindow.willMoveNotification, object: panel))
+        panel.setProgrammaticFrame(panel.frame.offsetBy(dx: 100, dy: -70))
+        panel.windowDidMove(Notification(name: NSWindow.didMoveNotification, object: panel))
+        manager.flushSession()
+        XCTAssertEqual(try store.load().first?.record.anchor, original)
+    }
+
+    func testFinishedNativeMoveDoesNotClaimLaterSystemMovement() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PinSessionStore(root: root)
+        let manager = PinManager(store: store)
+        defer { manager.closeAll() }
+        try manager.show(.text("Completed drag"))
+        let panel = try XCTUnwrap(visiblePins().first)
+        let moved = panel.frame.offsetBy(dx: 35, dy: -25)
+        panel.windowWillMove(Notification(name: NSWindow.willMoveNotification, object: panel))
+        panel.setFrame(moved, display: true)
+        panel.windowDidMove(Notification(name: NSWindow.didMoveNotification, object: panel))
+        manager.flushSession()
+        let userAnchor = try XCTUnwrap(store.load().first?.record.anchor)
+        panel.setFrame(moved.offsetBy(dx: 90, dy: -60), display: true)
+        panel.windowDidMove(Notification(name: NSWindow.didMoveNotification, object: panel))
+        manager.flushSession()
+        XCTAssertEqual(try store.load().first?.record.anchor, userAnchor)
+    }
+
+    func testNativeMoveWithoutMouseUpClearsAfterButtonRelease() async throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let panel = PinPanel(content: .text("Cancelled drag"), screen: screen, offset: 0)
+        defer { panel.close() }
+        var captured: [NSRect] = []
+        panel.onFrameChange = { captured.append($0) }
+        panel.windowWillMove(Notification(name: NSWindow.willMoveNotification, object: panel))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(captured, [panel.frame])
+        panel.setFrame(panel.frame.offsetBy(dx: 20, dy: -20), display: true)
+        panel.windowDidMove(Notification(name: NSWindow.didMoveNotification, object: panel))
+        panel.capturePendingUserMove()
+        XCTAssertEqual(captured.count, 1)
+    }
+
     func testEditedTextCopiesCurrentContentAndSurvivesRestartIncludingEmptyNote() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

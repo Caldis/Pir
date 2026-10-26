@@ -6,7 +6,7 @@ public struct HotKey: Codable, Equatable {
     public let modifierBits: UInt
     public var modifiers: NSEvent.ModifierFlags { NSEvent.ModifierFlags(rawValue: modifierBits) }
     public static let supportedModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
-    public static let `default` = HotKey(keyCode: 9, modifiers: [.command, .option])
+    public static let `default` = HotKey(keyCode: 9, modifiers: [.shift, .command])
 
     public init(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         self.keyCode = keyCode

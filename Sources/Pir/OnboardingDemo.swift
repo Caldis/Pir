@@ -13,6 +13,7 @@ final class OnboardingDemoController {
     private var screenObserver: NSObjectProtocol?
     private var accessibilityObserver: NSObjectProtocol?
     private(set) var celebrationPanel: NSPanel?
+    var activeCelebrationBurstCount: Int { celebration?.bursts.count ?? 0 }
 
     init(pins: PinManager,
          reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion },
@@ -98,7 +99,9 @@ private final class ScreenFireworksState: ObservableObject {
     func addBurst() {
         bursts.append(FireworkBurst())
         // Keep rapid presses responsive while bounding live particle simulations.
-        if bursts.count > 4 { bursts.removeFirst(bursts.count - 4) }
+        if bursts.count > OnboardingFireworks.maximumBurstCount {
+            bursts.removeFirst(bursts.count - OnboardingFireworks.maximumBurstCount)
+        }
     }
 }
 
@@ -110,7 +113,8 @@ private struct ScreenFireworks: View {
             ForEach(state.bursts) { burst in
                 ForEach(burst.systems) { system in
                     VortexView(system, targetFrameRate: 60) {
-                        Circle().fill(.white).frame(width: 28, height: 28)
+                        Circle().fill(.white)
+                            .frame(width: OnboardingFireworks.particleDiameter, height: OnboardingFireworks.particleDiameter)
                             .blendMode(.plusLighter).tag("circle")
                     }
                 }
@@ -122,14 +126,26 @@ private struct ScreenFireworks: View {
     }
 }
 
-private struct FireworkBurst: Identifiable {
+enum OnboardingFireworks {
+    static let particleDiameter: CGFloat = 84
+    static let maximumBurstCount = 4
+}
+
+struct FireworkBurst: Identifiable {
     let id = UUID()
-    let systems: [VortexSystem] = [
-        makeSystem(position: [0.07, 0.82], angle: 20),
-        makeSystem(position: [0.93, 0.82], angle: -20),
-        makeSystem(position: [0.12, 0.12], angle: 160),
-        makeSystem(position: [0.88, 0.12], angle: 200)
-    ]
+    let systems: [VortexSystem]
+
+    init(randomValue: (ClosedRange<Double>) -> Double = { Double.random(in: $0) }) {
+        let regions: [(ClosedRange<Double>, ClosedRange<Double>)] = [
+            (0.16...0.44, 0.56...0.84), (0.56...0.84, 0.56...0.84),
+            (0.16...0.44, 0.16...0.44), (0.56...0.84, 0.16...0.44)
+        ]
+        systems = regions.map { x, y in
+            let position = SIMD2(randomValue(x), randomValue(y))
+            let angle = atan2(0.5 - position.x, position.y - 0.5) * 180 / .pi
+            return Self.makeSystem(position: position, angle: angle)
+        }
+    }
 
     private static func makeSystem(position: SIMD2<Double>, angle: Double) -> VortexSystem {
         // Presets are shared instances; each celebration owns fresh simulation state.
@@ -146,8 +162,8 @@ private struct FireworkBurst: Identifiable {
             secondary.birthRate = 6000
             secondary.emissionLimit = 130
             secondary.lifespan = 1.4
-            secondary.speed = 0.18
-            secondary.speedVariation = 0.14
+            secondary.speed = 0.54
+            secondary.speedVariation = 0.42
             secondary.acceleration = [0, 0.2]
             secondary.dampingFactor = 2
         }

@@ -240,7 +240,7 @@ final class PinManagementTests: XCTestCase {
         XCTAssertEqual(SettingsStore(defaults: defaults).hotKey, replacement)
     }
 
-    func testHoverControlsAreHiddenAndWinOverResizeHitArea() throws {
+    func testHoverControlsAreHiddenAndWinOverResizeHitArea() async throws {
         let panel = PinPanel(content: .text("text"), screen: try XCTUnwrap(NSScreen.main), offset: 0)
         defer { panel.close() }
         let content = try XCTUnwrap(panel.contentView)
@@ -254,6 +254,7 @@ final class PinManagementTests: XCTestCase {
         let nearTop = close.convert(NSPoint(x: close.bounds.midX, y: close.bounds.maxY - 1), to: content.superview)
         XCTAssertTrue(content.hitTest(nearTop) === close)
         content.mouseExited(with: NSEvent())
+        try await Task.sleep(for: .milliseconds(250))
         XCTAssertTrue(close.isHiddenOrHasHiddenAncestor)
         XCTAssertTrue(restore.isHiddenOrHasHiddenAncestor)
     }

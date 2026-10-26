@@ -9,13 +9,18 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
     private let flow = FileGridLayout()
     private var flowViewport = NSSize.zero
     private let scroll = NSScrollView()
+    private let actions: FilePinActions
+    private var referenceObserver: Any?
+    private var infoWindows: [URL: FileInfoWindowController] = [:]
+    private var isRecycling = false
     private let modes = NSSegmentedControl(images: [
         NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)!,
         NSImage(systemSymbolName: "list.bullet", accessibilityDescription: nil)!
     ], trackingMode: .selectOne, target: nil, action: nil)
 
-    init(content: FilePinContent) {
+    init(content: FilePinContent, actions: FilePinActions = FilePinActions()) {
         self.content = content
+        self.actions = actions
         super.init(frame: .zero)
         wantsLayer = true
         modes.target = self
@@ -30,12 +35,18 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
         collection.delegate = self
         collection.isSelectable = true
         collection.allowsMultipleSelection = true
+        collection.allowsEmptySelection = true
         collection.backgroundColors = [.clear]
         collection.autoresizingMask = [.width]
         collection.register(FileCollectionItem.self, forItemWithIdentifier: FileCollectionItem.identifier)
         collection.setDraggingSourceOperationMask([.copy, .move, .link], forLocal: false)
         collection.onOpen = { [weak self] index in self?.openFile(at: index) }
         collection.onContextMenu = { [weak self] in self?.selectionMenu() }
+        collection.onOpenSelection = { [weak self] in self?.openSelection() }
+        collection.onRename = { [weak self] in self?.renameSelection() }
+        collection.onTrash = { [weak self] in self?.trashSelection() }
+        collection.onInfo = { [weak self] in self?.showInfo() }
+        collection.onCopy = { [weak self] in self?.copySelection() }
         scroll.documentView = collection
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -46,14 +57,23 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
             addSubview(child)
         }
         NSLayoutConstraint.activate([
-            modes.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            modes.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             modes.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             scroll.topAnchor.constraint(equalTo: topAnchor, constant: 42),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
         ])
+        referenceObserver = NotificationCenter.default.addObserver(forName: FilePinReferenceChange.notification, object: nil, queue: .main) { [weak self] note in
+            guard let change = note.object as? FilePinReferenceChange else { return }
+            self?.apply(change)
+        }
         updateFlow()
+    }
+
+    deinit {
+        if let referenceObserver { NotificationCenter.default.removeObserver(referenceObserver) }
+        for controller in infoWindows.values { controller.close() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -74,12 +94,17 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
     func removeFiles(at indexes: Set<Int>) {
         content.urls = content.urls.enumerated().filter { !indexes.contains($0.offset) }.map(\.element)
         if content.urls.isEmpty { onEmpty?(); return }
+        collection.selectionIndexPaths = []
         collection.reloadData()
         onChange?(content)
     }
 
     func fileURL(at index: Int) -> URL? {
         content.urls.indices.contains(index) ? content.urls[index] : nil
+    }
+
+    func isDragArea(at point: NSPoint) -> Bool {
+        point.y >= bounds.maxY - 42 && !modes.frame.contains(point)
     }
 
     func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int { content.urls.count }
@@ -102,15 +127,131 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
     }
 
     private func openFile(at index: Int) {
-        guard let url = fileURL(at: index), NSWorkspace.shared.open(url) else { NSSound.beep(); return }
+        guard let url = fileURL(at: index) else { return }
+        if !actions.open(url) { showFileError(CocoaError(.fileReadUnknown)) }
     }
 
-    private func selectionMenu() -> NSMenu {
+    func selectionMenu() -> NSMenu {
         let menu = NSMenu()
-        let remove = NSMenuItem(title: L("Remove from list"), action: #selector(removeSelection), keyEquivalent: "")
+        menu.autoenablesItems = false
+        let entries: [(String, String, Selector)] = [
+            ("Open", "arrow.up.forward.app", #selector(openSelection)),
+            ("Move to Trash", "trash", #selector(trashSelection)),
+            ("Get Info", "info.circle", #selector(showInfo)),
+            ("Rename", "pencil", #selector(renameSelection)),
+            ("Show in Finder", "folder", #selector(revealSelection))
+        ]
+        for (title, symbol, action) in entries {
+            let item = NSMenuItem(title: L(title), action: action, keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            item.target = self
+            item.isEnabled = !selectedURLs.isEmpty && !isRecycling
+            menu.addItem(item)
+            if title == "Open" || title == "Move to Trash" { menu.addItem(.separator()) }
+        }
+        menu.addItem(.separator())
+        let remove = menu.addItem(withTitle: L("Remove from list"), action: #selector(removeSelection), keyEquivalent: "")
         remove.target = self
-        menu.addItem(remove)
+        remove.isEnabled = !selectedURLs.isEmpty && !isRecycling
         return menu
+    }
+
+    private var selectedIndexes: Set<Int> { Set(collection.selectionIndexPaths.map(\.item)) }
+    private var selectedURLs: [URL] { selectedIndexes.sorted().compactMap(fileURL(at:)) }
+
+    func renameFiles(at indexes: Set<Int>, name: String) throws {
+        try renameFiles(urls: indexes.sorted().compactMap(fileURL(at:)), name: name)
+    }
+
+    func renameFiles(urls: [URL], name: String) throws {
+        do {
+            let replacements = try FilePinActions.renamedURLs(urls, name: name)
+            NotificationCenter.default.post(name: FilePinReferenceChange.notification,
+                                            object: FilePinReferenceChange(replacements: replacements))
+        } catch let failure as FilePinRenameFailure {
+            NotificationCenter.default.post(name: FilePinReferenceChange.notification,
+                                            object: FilePinReferenceChange(replacements: failure.relocated))
+            throw failure
+        }
+    }
+
+    func trashFiles(at indexes: Set<Int>, completion: @escaping (Error?) -> Void) {
+        guard !isRecycling else { return }
+        let urls = indexes.sorted().compactMap(fileURL(at:))
+        guard !urls.isEmpty else { completion(nil); return }
+        isRecycling = true
+        actions.recycle(urls) { [weak self] moved, error in
+            let update = {
+                self?.isRecycling = false
+                NotificationCenter.default.post(name: FilePinReferenceChange.notification,
+                                                object: FilePinReferenceChange(removed: Set(moved.keys)))
+                completion(error)
+            }
+            if Thread.isMainThread { update() }
+            else { DispatchQueue.main.async(execute: update) }
+        }
+    }
+
+    private func apply(_ change: FilePinReferenceChange) {
+        let updated = content.urls.compactMap(change.updatedURL)
+        guard updated != content.urls else { return }
+        content.urls = updated
+        if updated.isEmpty { onEmpty?(); return }
+        collection.selectionIndexPaths = []
+        collection.reloadData()
+        onChange?(content)
+    }
+
+    private func showFileError(_ error: Error) {
+        let alert = NSAlert()
+        alert.messageText = L("File operation failed")
+        alert.informativeText = [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion].compactMap { $0 }.joined(separator: "\n\n")
+        alert.runModal()
+    }
+
+    @objc private func openSelection() {
+        let failed = selectedURLs.filter { !actions.open($0) }
+        if !failed.isEmpty { showFileError(CocoaError(.fileReadUnknown)) }
+    }
+
+    @objc private func trashSelection() {
+        trashFiles(at: selectedIndexes) { [weak self] error in if let error { self?.showFileError(error) } }
+    }
+
+    @objc private func renameSelection() {
+        let urls = selectedURLs
+        guard let first = urls.first else { return }
+        let alert = NSAlert()
+        alert.messageText = L("Rename")
+        alert.informativeText = urls.count == 1 ? first.lastPathComponent : L("Selected files will be numbered. File extensions are preserved.")
+        let field = NSTextField(string: urls.count == 1 ? first.lastPathComponent : L("File"))
+        field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: L("Rename"))
+        alert.addButton(withTitle: L("Cancel"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do { try renameFiles(urls: urls, name: field.stringValue) }
+        catch { showFileError(error) }
+    }
+
+    @objc private func showInfo() {
+        for url in selectedURLs {
+            do {
+                if let existing = infoWindows[url] { existing.present(); continue }
+                let controller = try FileInfoWindowController(url: url)
+                controller.onClose = { [weak self] in self?.infoWindows.removeValue(forKey: url) }
+                infoWindows[url] = controller
+                controller.present()
+            } catch { showFileError(error) }
+        }
+    }
+
+    @objc private func revealSelection() { NSWorkspace.shared.activateFileViewerSelecting(selectedURLs) }
+    private func copySelection() {
+        guard !selectedURLs.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects(selectedURLs.map { $0 as NSURL })
     }
 
     @objc private func changeLayout() { setLayout(modes.selectedSegment == 0 ? .icons : .list) }
@@ -152,16 +293,73 @@ private final class FileGridLayout: NSCollectionViewLayout {
     }
 }
 
-private final class FileCollectionView: NSCollectionView {
+final class FileCollectionView: NSCollectionView {
     var onOpen: ((Int) -> Void)?
     var onContextMenu: (() -> NSMenu?)?
+    var onOpenSelection: (() -> Void)?
+    var onRename: (() -> Void)?
+    var onTrash: (() -> Void)?
+    var onInfo: (() -> Void)?
+    var onCopy: (() -> Void)?
+    private let selectionBand = CAShapeLayer()
 
     override func mouseDown(with event: NSEvent) {
+        let start = convert(event.locationInWindow, from: nil)
+        if indexPathForItem(at: start) == nil, let window {
+            window.makeFirstResponder(self)
+            let initial = selectionIndexPaths
+            let modifiers = event.modifierFlags.intersection([.command, .shift])
+            if modifiers.isEmpty { selectionIndexPaths = [] }
+            wantsLayer = true
+            selectionBand.fillColor = NSColor.selectedContentBackgroundColor.withAlphaComponent(0.15).cgColor
+            selectionBand.strokeColor = NSColor.keyboardFocusIndicatorColor.withAlphaComponent(0.8).cgColor
+            selectionBand.lineWidth = 1
+            layer?.addSublayer(selectionBand)
+            defer { selectionBand.removeFromSuperlayer() }
+            while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) {
+                if next.type == .leftMouseUp { break }
+                autoscroll(with: next)
+                let point = convert(next.locationInWindow, from: nil)
+                let rect = NSRect(x: min(start.x, point.x), y: min(start.y, point.y),
+                                  width: abs(point.x - start.x), height: abs(point.y - start.y))
+                updateBandSelection(in: rect, initial: initial, modifiers: modifiers)
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                selectionBand.path = CGPath(rect: rect, transform: nil)
+                CATransaction.commit()
+            }
+            return
+        }
         super.mouseDown(with: event)
         if event.clickCount == 2, let path = indexPathForItem(at: convert(event.locationInWindow, from: nil)) {
             onOpen?(path.item)
         }
     }
+
+    func updateBandSelection(in rect: NSRect, initial: Set<IndexPath>, modifiers: NSEvent.ModifierFlags) {
+        let intersecting = Set((collectionViewLayout?.layoutAttributesForElements(in: rect) ?? [])
+            .filter { $0.representedElementCategory == .item && $0.frame.insetBy(dx: 4, dy: 4).intersects(rect) }
+            .compactMap(\.indexPath))
+        if modifiers.contains(.command) { selectionIndexPaths = initial.symmetricDifference(intersecting) }
+        else if modifiers.contains(.shift) { selectionIndexPaths = initial.union(intersecting) }
+        else { selectionIndexPaths = intersecting }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if event.keyCode == 36, modifiers.isEmpty { onRename?(); return }
+        if modifiers == .command {
+            switch event.keyCode {
+            case 31, 125: onOpenSelection?(); return
+            case 34: onInfo?(); return
+            case 51: onTrash?(); return
+            default: break
+            }
+        }
+        super.keyDown(with: event)
+    }
+
+    @objc func copy(_ sender: Any?) { onCopy?() }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         guard let path = indexPathForItem(at: convert(event.locationInWindow, from: nil)) else { return nil }
@@ -180,6 +378,7 @@ private final class FileCollectionItem: NSCollectionViewItem {
     private let icon = NSImageView()
     private let name = NSTextField(wrappingLabelWithString: "")
     private let stack = NSStackView()
+    private var layoutMode: FilePinContent.Layout = .icons
     private var iconWidth: NSLayoutConstraint!
     private var iconHeight: NSLayoutConstraint!
 
@@ -194,6 +393,11 @@ private final class FileCollectionItem: NSCollectionViewItem {
         name.lineBreakMode = .byTruncatingTail
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.wantsLayer = true
+        icon.layer?.cornerRadius = 6
+        name.wantsLayer = true
+        name.layer?.cornerRadius = 4
+        name.layer?.masksToBounds = true
         stack.spacing = 4
         stack.addArrangedSubview(icon)
         stack.addArrangedSubview(name)
@@ -212,6 +416,7 @@ private final class FileCollectionItem: NSCollectionViewItem {
 
     func configure(_ url: URL, layout: FilePinContent.Layout) {
         _ = view
+        layoutMode = layout
         icon.image = NSWorkspace.shared.icon(forFile: url.path)
         name.stringValue = url.lastPathComponent
         view.toolTip = url.path
@@ -225,6 +430,12 @@ private final class FileCollectionItem: NSCollectionViewItem {
     }
 
     private func updateSelection() {
-        view.layer?.backgroundColor = isSelected ? NSColor.selectedContentBackgroundColor.withAlphaComponent(0.3).cgColor : NSColor.clear.cgColor
+        let listSelection = isSelected && layoutMode == .list
+        view.layer?.backgroundColor = listSelection ? NSColor.selectedContentBackgroundColor.cgColor : NSColor.clear.cgColor
+        icon.layer?.borderWidth = isSelected && layoutMode == .icons ? 2 : 0
+        icon.layer?.borderColor = NSColor.secondaryLabelColor.withAlphaComponent(0.5).cgColor
+        name.drawsBackground = isSelected && layoutMode == .icons
+        name.backgroundColor = .selectedContentBackgroundColor
+        name.textColor = isSelected ? .alternateSelectedControlTextColor : .labelColor
     }
 }

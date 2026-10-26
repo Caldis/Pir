@@ -2,7 +2,10 @@ import AppKit
 import PirCore
 import OSLog
 
-final class PinPanel: NSPanel {
+final class PinPanel: NSPanel, NSWindowDelegate {
+    private var userMoveInProgress = false
+    private var userMoveTimer: Timer?
+    private var programmaticFrameDepth = 0
     override var canBecomeKey: Bool { acceptsKeyboardInput }
     override var canBecomeMain: Bool { false }
     var onClose: (() -> Void)?
@@ -70,18 +73,85 @@ final class PinPanel: NSPanel {
         }
         surface.acceptsTextSize = { [weak self] bytes in self?.acceptsTextSize?(bytes) ?? true }
         contentView = surface
+        delegate = self
         setAccessibilityLabel(L("Pinned clipboard content"))
         setAccessibilityHelp(L(naturalText == nil ? "Drag to move. Drag any edge to resize. Use the close button to dismiss."
             : "Select and edit text. Drag the top margin to move. Drag any edge to resize."))
     }
 
     override func close() {
+        cancelUserMove()
+        (contentView as? PinSurface)?.closeHoverControls()
         super.close()
         onClose?()
         onClose = nil
     }
 
     func userDidChangeFrame() { onFrameChange?(frame) }
+
+    override func performDrag(with event: NSEvent) {
+        beginUserMove()
+        // WindowServer completes this gesture after performDrag returns, sometimes without mouseUp.
+        super.performDrag(with: event)
+    }
+
+    private func beginUserMove() {
+        guard !userMoveInProgress else { return }
+        userMoveInProgress = true
+        // A public button-state query also finishes cancelled/zero-distance drags without a delivered mouseUp.
+        let timer = Timer(timeInterval: 0.05, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            guard NSEvent.pressedMouseButtons & 1 == 0 else { return }
+            finishUserMove()
+        }
+        userMoveTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func finishUserMove() {
+        guard userMoveInProgress else { return }
+        userDidChangeFrame()
+        cancelUserMove()
+    }
+
+    private func cancelUserMove() {
+        userMoveInProgress = false
+        userMoveTimer?.invalidate()
+        userMoveTimer = nil
+    }
+
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        super.setFrame(frameRect, display: flag)
+        (contentView as? PinSurface)?.positionHoverControls()
+    }
+
+    func setProgrammaticFrame(_ frameRect: NSRect) {
+        cancelUserMove()
+        programmaticFrameDepth += 1
+        setFrame(frameRect, display: true)
+        programmaticFrameDepth -= 1
+    }
+
+    func windowWillMove(_ notification: Notification) {
+        if programmaticFrameDepth == 0 { beginUserMove() }
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        (contentView as? PinSurface)?.positionHoverControls()
+        guard userMoveInProgress, programmaticFrameDepth == 0 else { return }
+        if NSEvent.pressedMouseButtons & 1 == 0 { finishUserMove() }
+        else { userDidChangeFrame() }
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        (contentView as? PinSurface)?.positionHoverControls()
+    }
+
+    func capturePendingUserMove() {
+        guard userMoveInProgress else { return }
+        if NSEvent.pressedMouseButtons & 1 == 0 { finishUserMove() }
+        else { userDidChangeFrame() }
+    }
 
     func restoreNaturalSize() {
         guard let screen = screen ?? NSScreen.main else { return }
@@ -117,8 +187,16 @@ final class PinSurface: NSView, NSTextViewDelegate {
     private let controls = NSStackView()
     private let controlsBackdrop = PinControlsBackdrop()
     private let hoverOutline = PinHoverOutline()
+    private let transparentInputRing = CAShapeLayer()
+    static let transparentInputAlpha: CGFloat = 1 / 255
     static let resizeInset: CGFloat = 6.5
     private var tracking: NSTrackingArea?
+    private var hoverPanel: PinHoverPanel?
+    private var hoverHost: PinHoverHost?
+    private var isHovered = false
+    private var hoverGeneration = 0
+    private var exitGeneration = 0
+    var hoverAnimationDuration: TimeInterval = 0.18
     var onClose: (() -> Void)?
     var onRestore: (() -> Void)?
     var onTextChange: ((String) -> Void)?
@@ -181,6 +259,12 @@ final class PinSurface: NSView, NSTextViewDelegate {
             body = scroll
         }
         layer?.cornerRadius = usesWindowShadow ? 10 : 0
+        if !usesWindowShadow {
+            // WindowServer skips zero-alpha pixels before NSView hit testing. Only resize edges receive this input fill.
+            transparentInputRing.fillColor = NSColor.black.withAlphaComponent(Self.transparentInputAlpha).cgColor
+            transparentInputRing.fillRule = .evenOdd
+            layer?.addSublayer(transparentInputRing)
+        }
         if filesView != nil || textEditor != nil {
             let material = PreferencesStyle.background(height: 0)
             material.translatesAutoresizingMaskIntoConstraints = false
@@ -244,19 +328,29 @@ final class PinSurface: NSView, NSTextViewDelegate {
         hoverOutline.identifier = NSUserInterfaceItemIdentifier("pin-hover-outline")
         hoverOutline.isHidden = true
         addSubview(hoverOutline)
-        addSubview(controlsBackdrop)
-        addSubview(controls)
+        let controlsParent: NSView
+        if usesWindowShadow {
+            controlsParent = self
+        } else {
+            let host = PinHoverHost(frame: NSRect(x: 0, y: 0, width: 104, height: 40))
+            host.onEnter = { [weak self] in self?.setHovered(true) }
+            host.onExit = { [weak self] in self?.scheduleHoverExit() }
+            hoverHost = host
+            controlsParent = host
+        }
+        controlsParent.addSubview(controlsBackdrop)
+        controlsParent.addSubview(controls)
         NSLayoutConstraint.activate([
             hoverOutline.leadingAnchor.constraint(equalTo: leadingAnchor),
             hoverOutline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hoverOutline.topAnchor.constraint(equalTo: topAnchor),
             hoverOutline.bottomAnchor.constraint(equalTo: bottomAnchor),
-            controlsBackdrop.topAnchor.constraint(equalTo: topAnchor),
-            controlsBackdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
-            controlsBackdrop.widthAnchor.constraint(equalToConstant: 140),
-            controlsBackdrop.heightAnchor.constraint(equalToConstant: 64),
-            controls.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            controls.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            controlsBackdrop.topAnchor.constraint(equalTo: controlsParent.topAnchor),
+            controlsBackdrop.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor),
+            controlsBackdrop.widthAnchor.constraint(equalToConstant: usesWindowShadow ? 140 : 104),
+            controlsBackdrop.heightAnchor.constraint(equalToConstant: usesWindowShadow ? 64 : 40),
+            controls.topAnchor.constraint(equalTo: controlsParent.topAnchor, constant: 8),
+            controls.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor, constant: 8),
             copyButton.widthAnchor.constraint(equalToConstant: 22), copyButton.heightAnchor.constraint(equalToConstant: 22),
             closeButton.widthAnchor.constraint(equalToConstant: 22), closeButton.heightAnchor.constraint(equalToConstant: 22),
             restoreButton.widthAnchor.constraint(equalToConstant: 22), restoreButton.heightAnchor.constraint(equalToConstant: 22)
@@ -302,18 +396,148 @@ final class PinSurface: NSView, NSTextViewDelegate {
         window?.invalidateCursorRects(for: self)
     }
 
-    override func mouseEntered(with event: NSEvent) {
-        controlsBackdrop.isHidden = false
-        controls.isHidden = false
-        hoverOutline.isHidden = usesWindowShadow
+    override func mouseEntered(with event: NSEvent) { setHovered(true) }
+    override func mouseExited(with event: NSEvent) {
+        if hoverHost == nil { setHovered(false) }
+        else { scheduleHoverExit() }
+    }
+
+    private func scheduleHoverExit() {
+        exitGeneration += 1
+        let generation = exitGeneration
+        // The small gap between content and its child controls remains traversable during exit.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { [weak self] in
+            guard let self, generation == exitGeneration else { return }
+            let mouse = NSEvent.mouseLocation
+            if window?.frame.contains(mouse) == true || hoverPanel?.frame.contains(mouse) == true { return }
+            setHovered(false)
+        }
+    }
+
+    func setHovered(_ hovered: Bool) {
+        exitGeneration += 1
+        guard isHovered != hovered else { return }
+        isHovered = hovered
+        hoverGeneration += 1
+        let generation = hoverGeneration
         layoutSubtreeIfNeeded()
+        let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : hoverAnimationDuration
+        if hovered {
+            positionHoverControls()
+            hoverPanel?.alphaValue = 1
+            hoverPanel?.ignoresMouseEvents = false
+            if window?.isVisible == true { hoverPanel?.orderFrontRegardless() }
+        }
+        let animated = [controlsBackdrop, controls] + (usesWindowShadow ? [] : [hoverOutline])
+        for view in animated {
+            animateHover(view, visible: hovered, zoom: !usesWindowShadow && view !== controlsBackdrop, duration: duration)
+        }
+        if !hovered {
+            if duration == 0 { hideHoverPanel() }
+            else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+                    guard let self, generation == hoverGeneration, !isHovered else { return }
+                    hideHoverPanel()
+                }
+            }
+        }
         window?.invalidateCursorRects(for: self)
     }
-    override func mouseExited(with event: NSEvent) {
-        controls.isHidden = true
-        controlsBackdrop.isHidden = true
-        hoverOutline.isHidden = true
-        window?.invalidateCursorRects(for: self)
+
+    private func hideHoverPanel() {
+        hoverPanel?.alphaValue = 0
+        hoverPanel?.ignoresMouseEvents = true
+    }
+
+    private func hoverTransform(for view: NSView, scale: CGFloat) -> CATransform3D {
+        let shift = CATransform3DMakeTranslation(view.bounds.midX * (1 - scale), view.bounds.midY * (1 - scale), 0)
+        return CATransform3DScale(shift, scale, scale, 1)
+    }
+
+    private func animateHover(_ view: NSView, visible: Bool, zoom: Bool, duration: TimeInterval) {
+        view.wantsLayer = true
+        guard let layer = view.layer else { return }
+        let fromOpacity = view.isHidden ? Float(0) : layer.presentation()?.opacity ?? layer.opacity
+        let fromTransform = view.isHidden ? hoverTransform(for: view, scale: 0.92) : layer.presentation()?.transform ?? layer.transform
+        layer.removeAnimation(forKey: "pin-hover")
+        view.isHidden = false
+        let targetOpacity: Float = visible ? 1 : 0
+        let targetTransform = hoverTransform(for: view, scale: visible || !zoom ? 1 : 0.92)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.opacity = targetOpacity
+        layer.transform = targetTransform
+        CATransaction.commit()
+        guard duration > 0 else { view.isHidden = !visible; return }
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = fromOpacity
+        opacity.toValue = targetOpacity
+        var animations: [CAAnimation] = [opacity]
+        if zoom {
+            let transform = CABasicAnimation(keyPath: "transform")
+            transform.fromValue = NSValue(caTransform3D: fromTransform)
+            transform.toValue = NSValue(caTransform3D: targetTransform)
+            animations.append(transform)
+        }
+        let group = CAAnimationGroup()
+        group.animations = animations
+        group.duration = duration
+        group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(group, forKey: "pin-hover")
+        if !visible {
+            let generation = hoverGeneration
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak view] in
+                guard let self, generation == hoverGeneration, !isHovered else { return }
+                view?.isHidden = true
+            }
+        }
+    }
+
+    func positionHoverControls() {
+        guard let host = hoverHost, let window else { return }
+        if hoverPanel == nil {
+            let panel = PinHoverPanel(contentRect: host.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.isReleasedWhenClosed = false
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.hasShadow = false
+            panel.hidesOnDeactivate = false
+            panel.alphaValue = 0
+            panel.ignoresMouseEvents = true
+            panel.contentView = host
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            window.addChildWindow(panel, ordered: .above)
+            hoverPanel = panel
+        }
+        guard let panel = hoverPanel else { return }
+        let visible = window.screen?.visibleFrame ?? window.frame
+        let above = window.frame.maxY + 2
+        let y = above + 40 <= visible.maxY ? above : max(visible.minY, window.frame.minY - 42)
+        panel.setFrame(NSRect(x: min(max(window.frame.minX, visible.minX), visible.maxX - 104), y: y, width: 104, height: 40), display: true)
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func closeHoverControls() {
+        exitGeneration += 1
+        hoverGeneration += 1
+        if let hoverPanel {
+            window?.removeChildWindow(hoverPanel)
+            hoverPanel.close()
+        }
+        hoverPanel = nil
+    }
+
+    override func layout() {
+        super.layout()
+        guard !usesWindowShadow else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        transparentInputRing.frame = bounds
+        let path = CGMutablePath()
+        path.addRect(bounds)
+        path.addRect(bounds.insetBy(dx: Self.resizeInset, dy: Self.resizeInset))
+        transparentInputRing.path = path
+        CATransaction.commit()
     }
 
     override func mouseMoved(with event: NSEvent) { updateCursor(with: event) }
@@ -330,28 +554,28 @@ final class PinSurface: NSView, NSTextViewDelegate {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        if !controls.isHidden {
+        if isHovered, hoverHost == nil {
             for button in [copyButton, closeButton, restoreButton] where button.convert(button.bounds, to: self).contains(local) {
                 return button
             }
             if controls.frame.contains(local) { return controls }
         }
-        if bounds.contains(local), !edges(at: local).isEmpty || isTextDragMargin(local) { return self }
+        if bounds.contains(local), !edges(at: local).isEmpty || isTextDragMargin(local) || isFileDragMargin(local) { return self }
         return super.hitTest(point)
     }
 
     func edges(at point: NSPoint) -> ResizeEdges {
         guard bounds.contains(point) else { return [] }
         var result: ResizeEdges = []
-        if point.x < Self.resizeInset { result.insert(.left) }
-        else if point.x >= bounds.width - Self.resizeInset { result.insert(.right) }
-        if point.y < Self.resizeInset { result.insert(.bottom) }
-        else if point.y >= bounds.height - Self.resizeInset { result.insert(.top) }
+        if point.x < bounds.minX + Self.resizeInset { result.insert(.left) }
+        else if point.x >= bounds.maxX - Self.resizeInset { result.insert(.right) }
+        if point.y < bounds.minY + Self.resizeInset { result.insert(.bottom) }
+        else if point.y >= bounds.maxY - Self.resizeInset { result.insert(.top) }
         return result
     }
 
     func resizeCursor(at point: NSPoint) -> NSCursor {
-        if !controls.isHidden, controls.frame.contains(point) { return .arrow }
+        if isHovered, hoverHost == nil, controls.frame.contains(point) { return .arrow }
         let edges = edges(at: point)
         if edges.isEmpty, textEditor != nil {
             return isTextDragMargin(point) ? .openHand : .iBeam
@@ -361,6 +585,10 @@ final class PinSurface: NSView, NSTextViewDelegate {
 
     private func isTextDragMargin(_ point: NSPoint) -> Bool {
         textEditor != nil && point.y >= bounds.height - 12
+    }
+
+    private func isFileDragMargin(_ point: NSPoint) -> Bool {
+        filesView.map { $0.isDragArea(at: $0.convert(point, from: self)) } ?? false
     }
 
     private func cursor(for edges: ResizeEdges) -> NSCursor {
@@ -382,7 +610,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         addCursorRect(NSRect(x: bounds.width - d, y: bounds.height - d, width: d, height: d), cursor: Self.diagonalUp)
         addCursorRect(NSRect(x: 0, y: bounds.height - d, width: d, height: d), cursor: Self.diagonalDown)
         addCursorRect(NSRect(x: bounds.width - d, y: 0, width: d, height: d), cursor: Self.diagonalDown)
-        if !controls.isHidden {
+        if isHovered, hoverHost == nil {
             for button in [copyButton, closeButton, restoreButton] { addCursorRect(button.convert(button.bounds, to: self), cursor: .arrow) }
         }
     }
@@ -406,7 +634,6 @@ final class PinSurface: NSView, NSTextViewDelegate {
         let selectedEdges = edges(at: convert(event.locationInWindow, from: nil))
         guard !selectedEdges.isEmpty else {
             window.performDrag(with: event)
-            (window as? PinPanel)?.userDidChangeFrame()
             return
         }
         let initialFrame = window.frame
@@ -432,6 +659,28 @@ final class PinSurface: NSView, NSTextViewDelegate {
         }
         (window as? PinPanel)?.userDidChangeFrame()
     }
+}
+
+private final class PinHoverPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+private final class PinHoverHost: NSView {
+    var onEnter: (() -> Void)?
+    var onExit: (() -> Void)?
+    private var tracking: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onEnter?() }
+    override func mouseExited(with event: NSEvent) { onExit?() }
 }
 
 private final class PinControlButton: NSButton {
@@ -470,10 +719,6 @@ private final class PinHoverOutline: NSView {
         stroke.strokeColor = NSColor.white.withAlphaComponent(0.85).cgColor
         stroke.lineWidth = 1
         stroke.lineDashPattern = [4, 4]
-        stroke.shadowColor = NSColor.black.cgColor
-        stroke.shadowOpacity = 0.65
-        stroke.shadowRadius = 1
-        stroke.shadowOffset = .zero
         layer?.addSublayer(stroke)
     }
 
@@ -503,8 +748,10 @@ private final class PinControlsBackdrop: NSView {
                            NSColor.black.withAlphaComponent(0.30).cgColor,
                            NSColor.black.withAlphaComponent(0).cgColor]
         gradient.locations = [0, 0.45, 1]
-        gradient.startPoint = CGPoint(x: 0.72, y: 0.72)
-        gradient.endPoint = CGPoint(x: 0, y: 0)
+        gradient.startPoint = CGPoint(x: 0.28, y: 0.72)
+        gradient.endPoint = CGPoint(x: 1, y: 0)
+        layer?.cornerRadius = 10
+        layer?.masksToBounds = true
         layer?.addSublayer(gradient)
     }
 
@@ -574,7 +821,6 @@ private final class PinTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.option) {
             window?.performDrag(with: event)
-            (window as? PinPanel)?.userDidChangeFrame()
         } else {
             super.mouseDown(with: event)
         }

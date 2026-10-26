@@ -156,6 +156,20 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(HotKey.default.isValid)
     }
 
+    func testNewUserAndResetToDefaultUseShiftCommandVWhileSavedBindingsRemain() throws {
+        let name = "PirTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = SettingsStore(defaults: defaults)
+        let expected = HotKey(keyCode: 9, modifiers: [.shift, .command])
+        XCTAssertEqual(settings.hotKey, expected)
+        let saved = HotKey(keyCode: 9, modifiers: [.command, .option])
+        settings.hotKey = saved
+        XCTAssertEqual(SettingsStore(defaults: defaults).hotKey, saved)
+        settings.hotKey = .default
+        XCTAssertEqual(SettingsStore(defaults: defaults).hotKey, expected)
+    }
+
     func testFailedReplacementKeepsWorkingRegistration() throws {
         let backend = FakeHotKeyBackend()
         let binding = HotKeyBinding(backend: backend)

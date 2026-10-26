@@ -26,7 +26,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
-        window.center()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -44,9 +43,16 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             onTryShortcut: { [weak self] in self?.tryShortcut() },
             onFinish: { [weak self] in self?.finish() }
         ))
+        if let screen = NSScreen.main ?? window?.screen { center(on: screen.visibleFrame) }
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    func center(on visibleFrame: NSRect) {
+        guard let window else { return }
+        window.setFrameOrigin(NSPoint(x: visibleFrame.midX - window.frame.width / 2,
+                                      y: visibleFrame.midY - window.frame.height / 2))
     }
 
     private func finish() {
@@ -102,7 +108,9 @@ private struct OnboardingView: View {
                 Text(error).font(.system(size: 11)).foregroundStyle(.red).padding(.top, 6)
             }
             Spacer(minLength: 14)
-            Button(L("Start using Pir"), action: onFinish)
+            Button(action: onFinish) {
+                Text(L("Start using Pir")).frame(minWidth: 168, minHeight: 28)
+            }
                 .buttonStyle(.borderedProminent).controlSize(.large).keyboardShortcut(.defaultAction)
                 .padding(.top, 20)
             Spacer(minLength: 24)

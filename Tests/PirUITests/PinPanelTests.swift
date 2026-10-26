@@ -40,6 +40,7 @@ final class PinPanelTests: XCTestCase {
         let panel = PinPanel(content: .files(FilePinContent(urls: urls)), screen: screen, offset: 0)
         defer { panel.close() }
         let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
         let files = try XCTUnwrap(descendant(PinFilesView.self, in: surface))
         let collection = try XCTUnwrap(descendant(NSCollectionView.self, in: files))
         for width: CGFloat in [304, 410] {
@@ -129,6 +130,7 @@ final class PinPanelTests: XCTestCase {
         defer { panel.close() }
         panel.setFrame(NSRect(x: 100, y: 100, width: 300, height: 200), display: true)
         let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
         surface.layoutSubtreeIfNeeded()
         XCTAssertEqual(PinSurface.resizeInset, 6.5)
         let samples: [(NSPoint, ResizeEdges)] = [
@@ -280,6 +282,7 @@ final class PinPanelTests: XCTestCase {
         let panel = PinPanel(content: .text("Hover controls"), screen: screen, offset: 0)
         defer { panel.close() }
         let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
         let backdrop = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
         let buttons = surface.subviews.compactMap { $0 as? NSStackView }.flatMap(\.arrangedSubviews).compactMap { $0 as? NSButton }
         XCTAssertEqual(buttons.count, 3)
@@ -292,6 +295,8 @@ final class PinPanelTests: XCTestCase {
         surface.layoutSubtreeIfNeeded()
         backdrop.layoutSubtreeIfNeeded()
         XCTAssertFalse(backdrop.isHidden)
+        XCTAssertEqual(backdrop.frame.minX, 0)
+        XCTAssertEqual(buttons.map { $0.convert($0.bounds, to: surface).minX }.min(), 8)
         XCTAssertNil(backdrop.hitTest(NSPoint(x: 20, y: 20)))
         let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(backdrop.bounds.width), pixelsHigh: Int(backdrop.bounds.height),
                                                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
@@ -318,7 +323,7 @@ final class PinPanelTests: XCTestCase {
             XCTAssertGreaterThan(pressedArea, normalArea, "Press feedback should enlarge the icon")
             XCTAssertEqual(button.frame, originalFrame)
         }
-        surface.mouseExited(with: NSEvent())
+        surface.setHovered(false)
         XCTAssertTrue(backdrop.isHidden)
         XCTAssertTrue(buttons.allSatisfy(\.isHiddenOrHasHiddenAncestor))
     }
@@ -335,6 +340,7 @@ final class PinPanelTests: XCTestCase {
             let panel = PinPanel(content: .image(image), screen: screen, offset: 0)
             defer { panel.close() }
             let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+            surface.hoverAnimationDuration = 0
             let outline = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-hover-outline" })
             XCTAssertTrue(outline.isHidden)
             surface.mouseEntered(with: NSEvent())
@@ -343,14 +349,128 @@ final class PinPanelTests: XCTestCase {
             XCTAssertEqual(outline.frame, surface.bounds)
             XCTAssertNil(outline.hitTest(NSPoint(x: 2, y: 20)))
             let stroke = try XCTUnwrap(outline.layer?.sublayers?.compactMap { $0 as? CAShapeLayer }.first)
+            XCTAssertEqual(stroke.shadowOpacity, 0)
             XCTAssertNotNil(stroke.lineDashPattern)
             XCTAssertNotNil(stroke.path)
             panel.setContentSize(NSSize(width: 300, height: 180))
             surface.layoutSubtreeIfNeeded()
             XCTAssertEqual(outline.frame, surface.bounds)
-            surface.mouseExited(with: NSEvent())
+            surface.setHovered(false)
             XCTAssertTrue(outline.isHidden)
         }
+    }
+
+    func testTransparentControlsStayOutsideImageAndFollowItsFrame() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let panel = PinPanel(content: .image(try transparentImage()), screen: screen, offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        let originalFrame = panel.frame
+        surface.setHovered(true)
+        let overlay = try XCTUnwrap(panel.childWindows?.first)
+        let content = try XCTUnwrap(overlay.contentView)
+        content.layoutSubtreeIfNeeded()
+        XCTAssertFalse(panel.frame.intersects(overlay.frame))
+        XCTAssertEqual(panel.frame, originalFrame)
+        XCTAssertFalse(overlay.hasShadow)
+        let buttons = content.subviews.compactMap { $0 as? NSStackView }.flatMap(\.arrangedSubviews).compactMap { $0 as? NSButton }
+        XCTAssertEqual(buttons.count, 3)
+        let backdrop = try XCTUnwrap(content.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
+        XCTAssertEqual(backdrop.layer?.cornerRadius, 10)
+        XCTAssertTrue(backdrop.layer?.masksToBounds == true)
+        panel.setFrame(originalFrame.offsetBy(dx: 20, dy: -20), display: true)
+        XCTAssertEqual(overlay.frame.minX, panel.frame.minX, accuracy: 0.01)
+        XCTAssertFalse(panel.frame.intersects(overlay.frame))
+        surface.setHovered(false)
+        XCTAssertEqual(overlay.alphaValue, 0)
+        XCTAssertTrue(overlay.ignoresMouseEvents)
+        XCTAssertTrue(panel.childWindows?.contains(overlay) == true)
+    }
+
+    func testEveryContentKindRoutesEachEdgeAndCornerToSurface() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let transparent = try transparentImage()
+        let solid = NSImage(size: NSSize(width: 200, height: 120), flipped: false) { rect in
+            NSColor.white.setFill()
+            rect.fill()
+            return true
+        }
+        let contents: [ClipboardContent] = [.image(transparent), .image(solid), .text("Edges"),
+            .files(FilePinContent(urls: [URL(fileURLWithPath: "/tmp/edge.txt")]))]
+        for content in contents {
+            let panel = PinPanel(content: content, screen: screen, offset: 0)
+            defer { panel.close() }
+            panel.setFrame(NSRect(x: 100, y: 100, width: 300, height: 200), display: true)
+            let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+            surface.layoutSubtreeIfNeeded()
+            for point in [NSPoint(x: 3, y: 100), NSPoint(x: 297, y: 100), NSPoint(x: 150, y: 3), NSPoint(x: 150, y: 197),
+                          NSPoint(x: 3, y: 3), NSPoint(x: 297, y: 197), NSPoint(x: 3, y: 197), NSPoint(x: 297, y: 3)] {
+                XCTAssertTrue(surface.hitTest(surface.convert(point, to: surface.superview)) === surface)
+                XCTAssertFalse(surface.edges(at: point).isEmpty)
+                XCTAssertFalse(surface.resizeCursor(at: point) === NSCursor.arrow)
+            }
+        }
+    }
+
+    func testTransparentInputRingOnlyFillsResizeEdges() throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(surface.bounds.width),
+            pixelsHigh: Int(surface.bounds.height), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        surface.layer?.render(in: context.cgContext)
+        let edgeAlpha = try XCTUnwrap(bitmap.colorAt(x: 3, y: bitmap.pixelsHigh / 2)?.alphaComponent)
+        XCTAssertEqual(edgeAlpha, PinSurface.transparentInputAlpha, accuracy: 0.5 / 255)
+        XCTAssertLessThanOrEqual(edgeAlpha * 255, 1.01)
+        XCTAssertEqual(bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.alphaComponent, 0)
+    }
+
+    func testTransparentWindowServerHitTestingIncludesAlphaZeroEdges() throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        panel.orderFrontRegardless()
+        panel.contentView?.layoutSubtreeIfNeeded()
+        panel.contentView?.displayIfNeeded()
+        panel.displayIfNeeded()
+        CATransaction.flush()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        for point in [NSPoint(x: 3, y: panel.frame.height / 2), NSPoint(x: panel.frame.width - 3, y: 3),
+                      NSPoint(x: panel.frame.width / 2, y: panel.frame.height - 3)] {
+            let screenPoint = panel.convertPoint(toScreen: point)
+            XCTAssertEqual(NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0), panel.windowNumber,
+                           "WindowServer must deliver transparent edge input before NSView hitTest can resize")
+        }
+    }
+
+    func testHoverAnimationReversesAndEndsAtLatestRequestedState() async throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        let outline = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-hover-outline" })
+        surface.setHovered(true)
+        surface.setHovered(false)
+        surface.setHovered(true)
+        try await Task.sleep(for: .milliseconds(240))
+        XCTAssertFalse(outline.isHidden)
+        XCTAssertEqual(outline.layer?.opacity, 1)
+        surface.setHovered(false)
+        try await Task.sleep(for: .milliseconds(240))
+        XCTAssertTrue(outline.isHidden)
+        XCTAssertEqual(outline.layer?.opacity, 0)
+    }
+
+    private func transparentImage() throws -> NSImage {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 200, pixelsHigh: 120,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.bitmapData?.initialize(repeating: 0, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        let image = NSImage(size: NSSize(width: 200, height: 120))
+        image.addRepresentation(bitmap)
+        return image
     }
 
     func testLargeTextRepeatedResizeUsesTextKitTwoViewport() throws {

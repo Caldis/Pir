@@ -36,12 +36,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         catch {
             preferencesModel.error = L("Shortcut unavailable. Try another combination.")
         }
-        // Login launches stay quiet; an explicit launch exposes the settings entry point.
         let launchData = NSAppleEventManager.shared().currentAppleEvent?.paramDescriptor(forKeyword: keyAEPropData)
         let loginLaunch = launchData?.enumCodeValue == keyAELaunchedAsLogInItem
-        if !loginLaunch {
+        let presentation = AppLaunchPolicy.presentation(
+            hasCompletedOnboarding: settings.hasCompletedOnboarding, isLoginLaunch: loginLaunch,
+            isDebugBuild: AppLaunchPolicy.isDebugBuild, statusItemHidden: settings.hideStatusItem)
+        if presentation != .none {
             if settings.hideStatusItem { preferencesModel.setHideStatusItem(false) }
-            presentLaunchWindow()
+            switch presentation {
+            case .onboarding: showOnboarding()
+            case .preferences: preferences.present()
+            case .none: break
+            }
         }
     }
 

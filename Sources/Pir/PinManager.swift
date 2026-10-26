@@ -113,7 +113,8 @@ final class PinManager: ObservableObject {
         }
         let topology = displays()
         for (record, savedContent) in snapshot {
-            guard let placement = record.anchor.resolve(displays: topology, fallbackDisplayID: primaryDisplayID()),
+            guard let placement = record.anchor.resolve(displays: topology, fallbackDisplayID: primaryDisplayID(),
+                                                       minimum: record.kind == .text ? PinTextSizing.minimumSize : PinGeometry.minimumSize),
                   let screen = screen(with: placement.displayID) else { continue }
             let content: ClipboardContent
             switch savedContent {
@@ -357,6 +358,7 @@ final class PinManager: ObservableObject {
 
     func flushSession() {
         if restorationStarted, !restorationFinished { finishRestoration() }
+        for pin in Array(pins.values) { pin.panel.capturePendingUserMove() }
         saveDirtyContent()
         pendingSave?.cancel()
         let records = pins.values.map(\.record)
@@ -380,8 +382,9 @@ final class PinManager: ObservableObject {
     private func reconcileDisplays() {
         let topology = displays()
         for (id, var pin) in pins {
-            guard let placement = pin.record.anchor.resolve(displays: topology, fallbackDisplayID: primaryDisplayID()) else { continue }
-            pin.panel.setFrame(placement.frame, display: true)
+            guard let placement = pin.record.anchor.resolve(displays: topology, fallbackDisplayID: primaryDisplayID(),
+                                                           minimum: pin.panel.minSize) else { continue }
+            pin.panel.setProgrammaticFrame(placement.frame)
             pin.presentedFrame = pin.panel.frame
             pins[id] = pin
         }

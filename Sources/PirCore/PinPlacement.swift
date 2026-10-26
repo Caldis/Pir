@@ -56,14 +56,14 @@ public struct PinAnchor: Codable, Equatable {
         (0...1).contains(horizontalFraction) && (0...1).contains(verticalFraction)
     }
 
-    public func resolve(displays: [PinDisplay], fallbackDisplayID: String?) -> PinPlacement? {
+    public func resolve(displays: [PinDisplay], fallbackDisplayID: String?, minimum: CGSize = PinGeometry.minimumSize) -> PinPlacement? {
         guard isValid else { return nil }
         let preferred = displays.first { $0.id == displayID }
         guard let display = preferred ?? displays.first(where: { $0.id == fallbackDisplayID }) ?? displays.first else { return nil }
         let visible = display.visibleFrame
         guard visible.width > 0, visible.height > 0 else { return nil }
-        let width = min(visible.width, max(PinGeometry.minimumSize.width, size.width))
-        let height = min(visible.height, max(PinGeometry.minimumSize.height, size.height))
+        let width = min(visible.width, max(minimum.width, size.width))
+        let height = min(visible.height, max(minimum.height, size.height))
         let frame = CGRect(x: visible.minX + max(0, visible.width - width) * horizontalFraction,
                            y: visible.minY + max(0, visible.height - height) * verticalFraction,
                            width: width, height: height)
