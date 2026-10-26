@@ -128,3 +128,28 @@ Limited Review: 真实多显示器断开、透明浮窗拖动和完整悬停动�
 Limited Review: 桌面自动化未能稳定触发悬停工具条, 完整过渡动画的实际观感仍有限. 实际应用证据覆盖 cover 与 fit 的恢复静帧及真实升级, 控件交互与反馈时序使用定向回归证据
 
 证据、公开下载、日志和隔离会话归档位于 ~/.config/pir/migration/release-verification/0.1.5/. 截图位于 /Users/caldis/.codex/visualizations/2026/10/26/01a17595-51e9-79e3-b92f-0fe6e1f3718f/. 定时任务状态位于 ~/.config/pir/issue-monitor/state.json
+
+## 0.1.6 发行验收
+
+2026-10-26 完成正式发行, 显示版本 0.1.6, 构建编号 20261026.8. 功能提交为 31738460d2b485ddc8b1660e81fb08bafc182e8f, 签名 feed 提交为 65076781658e0466de8b86228ae93c068fb70685
+
+| 范围 | 结果 |
+| --- | --- |
+| Issue 与实施 | Caldis 提交的 #16、#17 完成; 共享浮窗源码串行实施, 文档并行, 新增需求分别完成聚焦只读审查 |
+| 本地检查 | scripts/check.sh 通过, 119 项 Swift 测试、5 项 Python 发布工具测试、双语、网站与脚本检查通过 |
+| 构建 | arm64 与 x86_64 Universal, 最低 macOS 13, 链接 SDK 为 27 |
+| 图片工具条 | 全部图片采用均匀半透明圆角背景, 透明图片保留外置子面板, 文本与文件沿用径向背景 |
+| 虚线与光标 | 白底与深底对比、动画中间帧四边可见性、内部透明、fit 留白状态、八方向光标事件与手势方向锁定通过定向回归 |
+| 图片尺寸过渡 | cover / fit 采用 bounds 与 position 插值, 起点、中间帧、终点及 presentation 反向接续通过, 原始 bitmap 与窗口 frame 回归通过 |
+| 应用公证 | Developer ID Application: BIAO CHEN, Team N7Z52F27XK; Apple Accepted, 提交 89b4e246-2278-4dcd-a933-7f8cc83f118e, 票据与 Gatekeeper 通过 |
+| DMG 公证 | Apple Accepted, 提交 a33cdf33-54ca-4e6d-b9be-5c06de5059de, 票据与镜像校验通过 |
+| 公开发行 | [Pir 0.1.6](https://github.com/Caldis/Pir/releases/tag/0.1.6), 公开 DMG 与 ZIP 的 SHA256 一致, 公开 feed 与仓库逐字节一致 |
+| 独立验签 | 应用公钥验证公开 feed 与 ZIP 的 Ed25519 签名通过; 公开 ZIP 与只读挂载 DMG 内的应用通过签名、票据与 Gatekeeper |
+| 实际更新 | 已安装 0.1.5 / 20261026.7 通过 Sparkle 发现、下载、安装并自动重启至 0.1.6 / 20261026.8, 再次检查显示最新版 |
+| 安装与会话 | 已安装应用的 118 个常规文件与公开 ZIP 一致; 透明图片、fit 图片和隐藏文本的 6 个内容与元数据文件升级前后一致, 管理页状态回读通过 |
+| CI | 功能提交 [40270960297](https://github.com/Caldis/Pir/actions/runs/40270960297) 与 feed 提交 [40270976068](https://github.com/Caldis/Pir/actions/runs/40270976068) 均成功 |
+| Issue 回读 | #16 与 #17 关闭为 completed, 独立 gh issue view 回读为 CLOSED |
+
+Limited Review: 桌面自动化对非激活浮窗 hover 和拖动的支持有限, 本轮鼠标操作未取得确定的缩放完成证据. 实际应用证据覆盖图片静态渲染、fit 恢复、管理页与真实升级; 完整悬停观感和应用失活时的鼠标投递仍属有限人工覆盖. 光标事件路由、手势锁定、虚线和图片过渡采用定向回归证据
+
+证据、公开下载、日志和隔离会话归档位于 ~/.config/pir/migration/release-verification/0.1.6/. 隔离会话已归档, 用户偏好与 Keychain 密钥继续保留. 新增图片图层在 CI 的 1x 窗口取整下存在 cover 外扩, 测试采用等比、居中与完整覆盖断言, 对应修正后的功能 CI 通过
