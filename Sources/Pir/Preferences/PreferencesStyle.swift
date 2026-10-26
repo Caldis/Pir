@@ -11,6 +11,7 @@ enum PreferencesStyle {
     static let shortcutSize = NSSize(width: 140, height: 28)
     static let shortcutClearSize: CGFloat = 28
     static let shortcutClearSpacing: CGFloat = 4
+    static let shortcutHelpSize: CGFloat = 16
     static let errorHeight: CGFloat = 54
     static let transitionDuration: TimeInterval = 0.3
     static let labelFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)

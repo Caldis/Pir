@@ -12,6 +12,7 @@ final class PinPanel: NSPanel {
     var onFilesChange: ((FilePinContent) -> Void)?
     private let naturalSize: NSSize
     private var naturalText: String?
+    private var naturalFiles: FilePinContent?
     private let acceptsKeyboardInput: Bool
 
     init(content: ClipboardContent, screen: NSScreen, offset: Int, restoredFrame: NSRect? = nil) {
@@ -21,8 +22,9 @@ final class PinPanel: NSPanel {
         case .image(let image):
             preferred = image.size
             naturalText = nil
-        case .files:
-            preferred = NSSize(width: 360, height: 260)
+        case .files(let files):
+            preferred = PinFileSizing.naturalSize(for: files, available: screen.visibleFrame.size)
+            naturalFiles = files
             naturalText = nil
         case .text(let text):
             preferred = PinTextSizing.naturalSize(for: text, available: screen.visibleFrame.size)
@@ -30,7 +32,7 @@ final class PinPanel: NSPanel {
         }
         naturalSize = preferred
         let minimum: NSSize
-        if case .files = content { minimum = NSSize(width: 240, height: 160) }
+        if case .files(let files) = content { minimum = PinFileSizing.minimumSize(for: files.layout) }
         else { minimum = naturalText == nil ? PinGeometry.minimumSize : PinTextSizing.minimumSize }
         let size = PinGeometry.initialSize(content: preferred, available: screen.visibleFrame.size, minimum: minimum)
         let visible = screen.visibleFrame
@@ -59,7 +61,13 @@ final class PinPanel: NSPanel {
             self?.naturalText = text
             self?.onTextChange?(text)
         }
-        surface.onFilesChange = { [weak self] files in self?.onFilesChange?(files) }
+        surface.onFilesChange = { [weak self] files in
+            guard let self else { return }
+            naturalFiles = files
+            minSize = PinFileSizing.minimumSize(for: files.layout)
+            onFilesChange?(files)
+            fitFileHeight()
+        }
         surface.acceptsTextSize = { [weak self] bytes in self?.acceptsTextSize?(bytes) ?? true }
         contentView = surface
         setAccessibilityLabel(L("Pinned clipboard content"))
@@ -78,11 +86,22 @@ final class PinPanel: NSPanel {
     func restoreNaturalSize() {
         guard let screen = screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let preferred = naturalText.map { PinTextSizing.naturalSize(for: $0, available: visible.size) } ?? naturalSize
+        let preferred = naturalFiles.map { PinFileSizing.naturalSize(for: $0, available: visible.size) }
+            ?? naturalText.map { PinTextSizing.naturalSize(for: $0, available: visible.size) } ?? naturalSize
         let size = PinGeometry.initialSize(content: preferred, available: visible.size, minimum: minSize)
         let origin = NSPoint(x: min(max(frame.minX, visible.minX), visible.maxX - size.width),
                              y: min(max(frame.maxY - size.height, visible.minY), visible.maxY - size.height))
         setFrame(NSRect(origin: origin, size: size), display: true)
+        userDidChangeFrame()
+    }
+
+    private func fitFileHeight() {
+        guard let files = naturalFiles, let screen = screen ?? NSScreen.main else { return }
+        let size = PinFileSizing.naturalSize(for: files, available: screen.visibleFrame.size, width: frame.width)
+        var frame = frame
+        frame.origin.y = max(screen.visibleFrame.minY, frame.maxY - size.height)
+        frame.size.height = size.height
+        setFrame(frame, display: true)
         userDidChangeFrame()
     }
 }
@@ -131,8 +150,8 @@ final class PinSurface: NSView, NSTextViewDelegate {
             scroll.hasVerticalScroller = true
             scroll.hasHorizontalScroller = false
             scroll.autohidesScrollers = true
-            scroll.drawsBackground = true
-            scroll.backgroundColor = .textBackgroundColor
+            scroll.drawsBackground = false
+            scroll.contentView.drawsBackground = false
             let view = PinTextView(usingTextLayoutManager: true)
             view.frame = NSRect(origin: .zero, size: PinTextSizing.minimumSize)
             view.isEditable = true
@@ -143,7 +162,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
             view.isRichText = false
             view.font = PinTextSizing.font
             view.textColor = .textColor
-            view.backgroundColor = .textBackgroundColor
+            view.drawsBackground = false
             view.textContainerInset = PinTextSizing.inset
             view.isVerticallyResizable = true
             view.isHorizontallyResizable = false
@@ -162,6 +181,17 @@ final class PinSurface: NSView, NSTextViewDelegate {
             body = scroll
         }
         layer?.cornerRadius = usesWindowShadow ? 10 : 0
+        if filesView != nil || textEditor != nil {
+            let material = PreferencesStyle.background(height: 0)
+            material.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(material)
+            NSLayoutConstraint.activate([
+                material.leadingAnchor.constraint(equalTo: leadingAnchor),
+                material.trailingAnchor.constraint(equalTo: trailingAnchor),
+                material.topAnchor.constraint(equalTo: topAnchor),
+                material.bottomAnchor.constraint(equalTo: bottomAnchor)
+            ])
+        }
         body.translatesAutoresizingMaskIntoConstraints = false
         addSubview(body)
         NSLayoutConstraint.activate([
@@ -187,7 +217,11 @@ final class PinSurface: NSView, NSTextViewDelegate {
         restoreButton.toolTip = L("Restore natural size")
         restoreButton.identifier = NSUserInterfaceItemIdentifier("restore-pin")
         restoreButton.setAccessibilityLabel(L("Restore natural size"))
-        copyButton.image = NSImage(systemSymbolName: "doc.on.doc.fill", accessibilityDescription: L("Copy content"))
+        copyButton.image = NSImage(systemSymbolName: "doc.on.doc.fill", accessibilityDescription: L("Copy content"))?.withSymbolConfiguration(
+            NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
+        if let image = copyButton.image {
+            image.size = NSSize(width: image.size.width * 13 / image.size.height, height: 13)
+        }
         copyButton.contentTintColor = .white
         copyButton.bezelStyle = .circular
         copyButton.isBordered = false
@@ -198,7 +232,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         copyButton.setAccessibilityLabel(L("Copy content"))
         controls.orientation = .horizontal
         controls.spacing = 4
-        controls.addArrangedSubview(copyButton)
+        if filesView == nil { controls.addArrangedSubview(copyButton) }
         controls.addArrangedSubview(restoreButton)
         controls.addArrangedSubview(closeButton)
         controls.translatesAutoresizingMaskIntoConstraints = false
@@ -459,23 +493,18 @@ private final class PinHoverOutline: NSView {
 
 private final class PinControlsBackdrop: NSView {
     private let gradient = CAGradientLayer()
-    private let verticalFade = CAGradientLayer()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         setAccessibilityElement(false)
-        gradient.colors = [NSColor.clear.cgColor, NSColor.black.withAlphaComponent(0.65).cgColor,
-                           NSColor.black.withAlphaComponent(0.65).cgColor, NSColor.clear.cgColor]
-        gradient.locations = [0, 0.44, 0.82, 1]
-        gradient.startPoint = CGPoint(x: 0, y: 0.5)
-        gradient.endPoint = CGPoint(x: 1, y: 0.5)
-        verticalFade.colors = [NSColor.clear.cgColor, NSColor.black.cgColor,
-                               NSColor.black.cgColor, NSColor.clear.cgColor]
-        verticalFade.locations = [0, 0.32, 0.7, 1]
-        verticalFade.startPoint = CGPoint(x: 0.5, y: 0)
-        verticalFade.endPoint = CGPoint(x: 0.5, y: 1)
-        gradient.mask = verticalFade
+        gradient.type = .radial
+        gradient.colors = [NSColor.black.withAlphaComponent(0.55).cgColor,
+                           NSColor.black.withAlphaComponent(0.30).cgColor,
+                           NSColor.black.withAlphaComponent(0).cgColor]
+        gradient.locations = [0, 0.45, 1]
+        gradient.startPoint = CGPoint(x: 0.72, y: 0.72)
+        gradient.endPoint = CGPoint(x: 0, y: 0)
         layer?.addSublayer(gradient)
     }
 
@@ -486,7 +515,6 @@ private final class PinControlsBackdrop: NSView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         gradient.frame = bounds
-        verticalFade.frame = gradient.bounds
         CATransaction.commit()
     }
 
@@ -562,7 +590,5 @@ private final class PinTextView: NSTextView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         textColor = .textColor
-        backgroundColor = .textBackgroundColor
-        enclosingScrollView?.backgroundColor = .textBackgroundColor
     }
 }

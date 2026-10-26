@@ -1,12 +1,13 @@
 import AppKit
 import PirCore
 
-final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegateFlowLayout {
+final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate {
     private(set) var content: FilePinContent
     var onChange: ((FilePinContent) -> Void)?
     var onEmpty: (() -> Void)?
     private let collection = FileCollectionView()
-    private let flow = NSCollectionViewFlowLayout()
+    private let flow = FileGridLayout()
+    private var flowViewport = NSSize.zero
     private let scroll = NSScrollView()
     private let modes = NSSegmentedControl(images: [
         NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: nil)!,
@@ -17,7 +18,6 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
         self.content = content
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         modes.target = self
         modes.action = #selector(changeLayout)
         modes.controlSize = .small
@@ -40,6 +40,7 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
+        scroll.contentView.drawsBackground = false
         for child in [modes, scroll] {
             child.translatesAutoresizingMaskIntoConstraints = false
             addSubview(child)
@@ -60,11 +61,6 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
     override func layout() {
         super.layout()
         updateFlow()
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
     }
 
     func setLayout(_ layout: FilePinContent.Layout) {
@@ -99,14 +95,9 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
     }
 
     private func updateFlow() {
-        let size = content.layout == .list
-            ? NSSize(width: max(1, scroll.contentSize.width - 8), height: 32)
-            : NSSize(width: 82, height: 88)
-        guard flow.itemSize != size else { return }
-        flow.itemSize = size
-        flow.minimumInteritemSpacing = 4
-        flow.minimumLineSpacing = 4
-        flow.sectionInset = NSEdgeInsets(top: 4, left: 4, bottom: 4, right: 4)
+        guard flow.mode != content.layout || flowViewport != scroll.contentSize else { return }
+        flow.mode = content.layout
+        flowViewport = scroll.contentSize
         flow.invalidateLayout()
     }
 
@@ -124,6 +115,41 @@ final class PinFilesView: NSView, NSCollectionViewDataSource, NSCollectionViewDe
 
     @objc private func changeLayout() { setLayout(modes.selectedSegment == 0 ? .icons : .list) }
     @objc private func removeSelection() { removeFiles(at: Set(collection.selectionIndexPaths.map(\.item))) }
+}
+
+private final class FileGridLayout: NSCollectionViewLayout {
+    var mode: FilePinContent.Layout = .icons
+    private var attributes: [NSCollectionViewLayoutAttributes] = []
+    private var size = NSSize.zero
+
+    override func prepare() {
+        super.prepare()
+        guard let collectionView else { return }
+        let viewport = collectionView.enclosingScrollView?.contentSize ?? collectionView.bounds.size
+        let columns = mode == .list ? 1 : PinFileSizing.columns(contentWidth: viewport.width)
+        let item = mode == .list ? NSSize(width: max(1, viewport.width - 8), height: PinFileSizing.listRowHeight) : PinFileSizing.itemSize
+        let gap = mode == .list ? 4.0 : PinFileSizing.spacing
+        let count = collectionView.numberOfSections > 0 ? collectionView.numberOfItems(inSection: 0) : 0
+        attributes = (0..<count).map { index in
+            let value = NSCollectionViewLayoutAttributes(forItemWith: IndexPath(item: index, section: 0))
+            value.frame = NSRect(x: 4 + CGFloat(index % columns) * (item.width + gap),
+                                 y: 4 + CGFloat(index / columns) * (item.height + gap),
+                                 width: item.width, height: item.height)
+            return value
+        }
+        size = NSSize(width: viewport.width, height: max(viewport.height, (attributes.last?.frame.maxY ?? 0) + 4))
+    }
+
+    override var collectionViewContentSize: NSSize { size }
+    override func layoutAttributesForElements(in rect: NSRect) -> [NSCollectionViewLayoutAttributes] {
+        attributes.filter { $0.frame.intersects(rect) }
+    }
+    override func layoutAttributesForItem(at indexPath: IndexPath) -> NSCollectionViewLayoutAttributes? {
+        attributes.indices.contains(indexPath.item) ? attributes[indexPath.item] : nil
+    }
+    override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool {
+        newBounds.size != collectionView?.bounds.size
+    }
 }
 
 private final class FileCollectionView: NSCollectionView {
@@ -167,7 +193,7 @@ private final class FileCollectionItem: NSCollectionViewItem {
         name.maximumNumberOfLines = 2
         name.lineBreakMode = .byTruncatingTail
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        icon.imageScaling = .scaleProportionallyDown
+        icon.imageScaling = .scaleProportionallyUpOrDown
         stack.spacing = 4
         stack.addArrangedSubview(icon)
         stack.addArrangedSubview(name)
@@ -191,7 +217,7 @@ private final class FileCollectionItem: NSCollectionViewItem {
         view.toolTip = url.path
         stack.orientation = layout == .list ? .horizontal : .vertical
         stack.alignment = layout == .list ? .centerY : .centerX
-        iconWidth.constant = layout == .list ? 24 : 40
+        iconWidth.constant = layout == .list ? 24 : PinFileSizing.iconSize
         iconHeight.constant = iconWidth.constant
         name.alignment = layout == .list ? .left : .center
         name.maximumNumberOfLines = layout == .list ? 1 : 2

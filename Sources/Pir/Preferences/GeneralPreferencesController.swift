@@ -52,6 +52,7 @@ final class GeneralPreferencesController: PreferencesPageController {
         clearShortcut.toolTip = L("Clear shortcut")
         clearShortcut.translatesAutoresizingMaskIntoConstraints = false
         shortcutHelp.bezelStyle = .helpButton
+        shortcutHelp.controlSize = .mini
         shortcutHelp.title = ""
         shortcutHelp.target = self
         shortcutHelp.action = #selector(showShortcutHelp)
@@ -97,8 +98,8 @@ final class GeneralPreferencesController: PreferencesPageController {
             clearShortcut.heightAnchor.constraint(equalToConstant: PreferencesStyle.shortcutClearSize),
             shortcutHelp.leadingAnchor.constraint(equalTo: clearShortcut.trailingAnchor, constant: 6),
             shortcutHelp.centerYAnchor.constraint(equalTo: recorder.centerYAnchor),
-            shortcutHelp.widthAnchor.constraint(equalToConstant: 20),
-            shortcutHelp.heightAnchor.constraint(equalToConstant: 20),
+            shortcutHelp.widthAnchor.constraint(equalToConstant: PreferencesStyle.shortcutHelpSize),
+            shortcutHelp.heightAnchor.constraint(equalToConstant: PreferencesStyle.shortcutHelpSize),
             shortcut.centerYAnchor.constraint(equalTo: recorder.centerYAnchor),
             shortcutDescription.leadingAnchor.constraint(equalTo: recorder.leadingAnchor),
             shortcutDescription.trailingAnchor.constraint(equalTo: description.trailingAnchor),

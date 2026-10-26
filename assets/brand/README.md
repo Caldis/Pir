@@ -7,7 +7,7 @@
 | `app-icon.png` | 1024px 应用图标原图, 透明外边角 |
 | `AppIcon.icns` | macOS 应用图标, 含 16px 至 1024px 尺寸 |
 | `AppIcon.iconset/` | `iconutil` 输入尺寸集合 |
-| `MenuBarTemplate.svg` | 菜单栏小写 p 与折角 v 标记的矢量母版 |
+| `MenuBarTemplate.svg` | 应用 Logo 双悬浮面板轮廓的单色矢量母版 |
 | `MenuBarTemplate.png` | 18px 单色透明菜单栏图标 |
 | `MenuBarTemplate@2x.png` | 36px Retina 菜单栏图标 |
 
@@ -17,7 +17,7 @@
 
 ## 图标生成
 
-应用图标采用内置 imagegen 生成, 菜单栏标记采用小写 p 与折角 v 组合
+应用图标采用内置 imagegen 生成, 菜单栏标记采用相同的双悬浮面板轮廓
 
 生成提示词:
 
