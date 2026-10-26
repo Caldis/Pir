@@ -206,6 +206,12 @@ final class PinSurface: NSView, NSTextViewDelegate {
     private var filesView: PinFilesView?
     private let controls = NSStackView()
     private let controlsBackdrop = PinControlsBackdrop()
+    private var backdropTopConstraint: NSLayoutConstraint?
+    private var backdropLeadingConstraint: NSLayoutConstraint?
+    private var backdropWidthConstraint: NSLayoutConstraint?
+    private var controlsTopConstraint: NSLayoutConstraint?
+    private var controlsLeadingConstraint: NSLayoutConstraint?
+    private var controlsHorizontalPadding: CGFloat = 8
     private let hoverOutline = PinHoverOutline()
     private let transparentInputRing = CAShapeLayer()
     static let transparentInputAlpha: CGFloat = 1 / 255
@@ -372,22 +378,30 @@ final class PinSurface: NSView, NSTextViewDelegate {
         }
         controlsParent.addSubview(controlsBackdrop)
         controlsParent.addSubview(controls)
+        let backdropTop = controlsBackdrop.topAnchor.constraint(equalTo: controlsParent.topAnchor)
+        let backdropLeading = controlsBackdrop.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor)
+        let backdropWidth = controlsBackdrop.widthAnchor.constraint(equalToConstant: imageView == nil ? 140 : controlsWidth)
+        let controlsTop = controls.topAnchor.constraint(equalTo: controlsParent.topAnchor, constant: 8)
+        let controlsLeading = controls.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor, constant: 8)
+        backdropTopConstraint = backdropTop
+        backdropLeadingConstraint = backdropLeading
+        backdropWidthConstraint = backdropWidth
+        controlsTopConstraint = controlsTop
+        controlsLeadingConstraint = controlsLeading
         NSLayoutConstraint.activate([
             hoverOutline.leadingAnchor.constraint(equalTo: leadingAnchor),
             hoverOutline.trailingAnchor.constraint(equalTo: trailingAnchor),
             hoverOutline.topAnchor.constraint(equalTo: topAnchor),
             hoverOutline.bottomAnchor.constraint(equalTo: bottomAnchor),
-            controlsBackdrop.topAnchor.constraint(equalTo: controlsParent.topAnchor),
-            controlsBackdrop.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor),
-            controlsBackdrop.widthAnchor.constraint(equalToConstant: imageView == nil ? 140 : controlsWidth),
+            backdropTop, backdropLeading, backdropWidth,
             controlsBackdrop.heightAnchor.constraint(equalToConstant: imageView == nil ? 64 : 40),
-            controls.topAnchor.constraint(equalTo: controlsParent.topAnchor, constant: 8),
-            controls.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor, constant: 8),
+            controlsTop, controlsLeading,
             copyButton.widthAnchor.constraint(equalToConstant: 22), copyButton.heightAnchor.constraint(equalToConstant: 22),
             scalingButton.widthAnchor.constraint(equalToConstant: 22), scalingButton.heightAnchor.constraint(equalToConstant: 22),
             closeButton.widthAnchor.constraint(equalToConstant: 22), closeButton.heightAnchor.constraint(equalToConstant: 22),
             restoreButton.widthAnchor.constraint(equalToConstant: 22), restoreButton.heightAnchor.constraint(equalToConstant: 22)
         ])
+        updateControlsLayout()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -457,7 +471,21 @@ final class PinSurface: NSView, NSTextViewDelegate {
     }
 
     private var controlsWidth: CGFloat {
-        CGFloat(controls.arrangedSubviews.count) * 22 + CGFloat(max(0, controls.arrangedSubviews.count - 1)) * 4 + 16
+        CGFloat(controls.arrangedSubviews.count) * 22 + CGFloat(max(0, controls.arrangedSubviews.count - 1)) * controls.spacing + controlsHorizontalPadding * 2
+    }
+
+    private func updateControlsLayout() {
+        guard imageView != nil, usesWindowShadow else { return }
+        let compact = bounds.width > 0 && bounds.width < 132
+        let padding: CGFloat = compact ? 4 : 8
+        let spacing: CGFloat = compact ? 2 : 4
+        if controls.spacing != spacing { controls.spacing = spacing }
+        controlsHorizontalPadding = padding
+        let values: [(NSLayoutConstraint?, CGFloat)] = [(backdropTopConstraint, 8), (backdropLeadingConstraint, 8),
+            (backdropWidthConstraint, controlsWidth), (controlsTopConstraint, 16), (controlsLeadingConstraint, 8 + padding)]
+        for (constraint, value) in values {
+            if let constraint, constraint.constant != value { constraint.constant = value }
+        }
     }
 
     func textDidChange(_ notification: Notification) {
@@ -651,6 +679,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
     }
 
     override func layout() {
+        updateControlsLayout()
         super.layout()
         guard imageView != nil else { return }
         CATransaction.begin()
@@ -673,6 +702,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        updateControlsLayout()
         refreshHoverOutline(animated: false)
         window?.invalidateCursorRects(for: self)
     }
@@ -684,6 +714,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
                 return button
             }
             if controls.frame.contains(local) { return controls }
+            if imageView != nil, controlsBackdrop.frame.contains(local) { return self }
         }
         if bounds.contains(local), !edges(at: local).isEmpty || isTextDragMargin(local) || isFileDragMargin(local) { return self }
         return super.hitTest(point)
@@ -700,7 +731,8 @@ final class PinSurface: NSView, NSTextViewDelegate {
     }
 
     func resizeCursor(at point: NSPoint) -> NSCursor {
-        if isHovered, hoverHost == nil, controls.frame.contains(point) { return .arrow }
+        if isHovered, hoverHost == nil,
+           controls.frame.contains(point) || (imageView != nil && controlsBackdrop.frame.contains(point)) { return .arrow }
         let edges = edges(at: point)
         if edges.isEmpty, textEditor != nil {
             return isTextDragMargin(point) ? .openHand : .iBeam
@@ -736,6 +768,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         addCursorRect(NSRect(x: 0, y: bounds.height - d, width: d, height: d), cursor: Self.diagonalDown)
         addCursorRect(NSRect(x: bounds.width - d, y: 0, width: d, height: d), cursor: Self.diagonalDown)
         if isHovered, hoverHost == nil {
+            if imageView != nil { addCursorRect(controlsBackdrop.frame, cursor: .arrow) }
             for button in controls.arrangedSubviews.compactMap({ $0 as? NSButton }) { addCursorRect(button.convert(button.bounds, to: self), cursor: .arrow) }
         }
     }
@@ -814,6 +847,8 @@ private final class PinHoverHost: NSView {
 }
 
 private final class PinControlButton: NSButton {
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0) }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         let cell = PinControlButtonCell()
@@ -854,7 +889,9 @@ private final class PinControlButtonCell: NSButtonCell {
 
 private final class PinHoverOutline: NSView {
     let contentLayer = CALayer()
+    private let contrastContainer = CALayer()
     private let contrast = CAShapeLayer()
+    private let outsideMask = CAShapeLayer()
     private let stroke = CAShapeLayer()
     private let edgeMask = CAShapeLayer()
 
@@ -880,7 +917,12 @@ private final class PinHoverOutline: NSView {
         edgeMask.fillColor = NSColor.black.cgColor
         contentLayer.name = "pin-hover-outline-content"
         contentLayer.anchorPoint = .zero
-        contentLayer.addSublayer(contrast)
+        contrastContainer.name = "pin-hover-outline-contrast-container"
+        outsideMask.fillRule = .evenOdd
+        outsideMask.fillColor = NSColor.black.cgColor
+        contrastContainer.addSublayer(contrast)
+        contrastContainer.mask = outsideMask
+        contentLayer.addSublayer(contrastContainer)
         contentLayer.addSublayer(stroke)
         layer?.addSublayer(contentLayer)
         // The mask stays stationary while the stroke zooms, retaining the existing resize input perimeter.
@@ -897,10 +939,17 @@ private final class PinHoverOutline: NSView {
         contentLayer.position = bounds.origin
         // Half-point alignment gives the one-point white stroke a complete pixel at 1x scale.
         let outline = CGPath(roundedRect: bounds.insetBy(dx: 2.5, dy: 2.5), cornerWidth: 9, cornerHeight: 9, transform: nil)
+        contrastContainer.frame = bounds
         for line in [contrast, stroke] {
             line.frame = bounds
             line.path = outline
         }
+        // Clip the composited dark stroke and its shadow outside the white stroke's outer boundary.
+        outsideMask.frame = bounds
+        let outside = CGMutablePath()
+        outside.addRect(bounds)
+        outside.addPath(CGPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), cornerWidth: 9.5, cornerHeight: 9.5, transform: nil))
+        outsideMask.path = outside
         edgeMask.frame = bounds
         let inputBounds = CGMutablePath()
         inputBounds.addRect(bounds)

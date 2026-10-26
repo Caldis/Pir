@@ -802,6 +802,107 @@ final class PinPanelTests: XCTestCase {
         XCTAssertFalse(outline.isHidden)
     }
 
+    func testOutlineDarkContrastStaysOutsideWhiteOnEdgesAndCorners() throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        surface.setHovered(true)
+        surface.layoutSubtreeIfNeeded()
+        let outline = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-hover-outline" })
+        outline.layoutSubtreeIfNeeded()
+        let content = try XCTUnwrap(outline.layer?.sublayers?.first { $0.name == "pin-hover-outline-content" })
+        let whiteStroke = try XCTUnwrap(content.sublayers?.first { $0.name == "pin-hover-outline-stroke" })
+        whiteStroke.isHidden = true
+        let darkOnly = try renderHoverArtwork(outline)
+        let width = darkOnly.pixelsWide
+        let height = darkOnly.pixelsHigh
+        var exteriorMaximum: CGFloat = 0
+        for y in 16..<(height - 16) {
+            exteriorMaximum = max(exteriorMaximum, darkOnly.colorAt(x: 1, y: y)?.alphaComponent ?? 0)
+            XCTAssertEqual(darkOnly.colorAt(x: 3, y: y)?.alphaComponent, 0)
+            XCTAssertEqual(darkOnly.colorAt(x: width - 4, y: y)?.alphaComponent, 0)
+        }
+        for x in 16..<(width - 16) {
+            XCTAssertEqual(darkOnly.colorAt(x: x, y: 3)?.alphaComponent, 0)
+            XCTAssertEqual(darkOnly.colorAt(x: x, y: height - 4)?.alphaComponent, 0)
+        }
+        XCTAssertGreaterThan(exteriorMaximum, 0.05)
+        let safeInterior = CGPath(roundedRect: outline.bounds.insetBy(dx: 3.5, dy: 3.5), cornerWidth: 8, cornerHeight: 8, transform: nil)
+        var cornerExterior = [CGFloat](repeating: 0, count: 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let alpha = darkOnly.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                if safeInterior.contains(NSPoint(x: CGFloat(x) + 0.5, y: CGFloat(y) + 0.5)) { XCTAssertEqual(alpha, 0) }
+                if x < 16, y < 16 { cornerExterior[0] = max(cornerExterior[0], alpha) }
+                if x >= width - 16, y < 16 { cornerExterior[1] = max(cornerExterior[1], alpha) }
+                if x < 16, y >= height - 16 { cornerExterior[2] = max(cornerExterior[2], alpha) }
+                if x >= width - 16, y >= height - 16 { cornerExterior[3] = max(cornerExterior[3], alpha) }
+            }
+        }
+        for alpha in cornerExterior { XCTAssertGreaterThan(alpha, 0.05) }
+        try exportHoverArtwork(darkOnly, name: "pin-hover-outline-outside-dark-only")
+        whiteStroke.isHidden = false
+        try exportHoverArtwork(try renderHoverArtwork(outline, background: .white), name: "pin-hover-outline-one-sided-white")
+        try exportHoverArtwork(try renderHoverArtwork(outline, background: NSColor(white: 0.08, alpha: 1)), name: "pin-hover-outline-one-sided-dark")
+    }
+
+    func testOpaqueImageToolbarInsetsAdaptWithoutClippingOrBlockingResizeEdges() throws {
+        let panel = PinPanel(content: .image(try opaqueWideImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        for width: CGFloat in [120, 131, 132, 360] {
+            for mode in [PinImageScaling.cover, .fit] {
+                panel.setFrame(NSRect(x: 100, y: 100, width: width, height: 200), display: true)
+                panel.setImageScaling(mode, animated: false)
+                surface.setHovered(true)
+                surface.layoutSubtreeIfNeeded()
+                let backdrop = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
+                let buttons = try toolbarButtons(in: panel)
+                let compact = width < 132
+                XCTAssertEqual(backdrop.frame.minX, 8)
+                XCTAssertEqual(surface.bounds.maxY - backdrop.frame.maxY, 8)
+                XCTAssertEqual(backdrop.frame.width, compact ? 102 : 116)
+                XCTAssertEqual(backdrop.frame.height, 40)
+                XCTAssertGreaterThanOrEqual(surface.bounds.maxX - backdrop.frame.maxX, 8)
+                XCTAssertEqual(buttons.count, 4)
+                for button in buttons {
+                    let rect = button.convert(button.bounds, to: surface)
+                    XCTAssertEqual(rect.size, NSSize(width: 22, height: 22))
+                    XCTAssertTrue(backdrop.frame.contains(rect))
+                    let center = NSPoint(x: rect.midX, y: rect.midY)
+                    XCTAssertTrue(surface.hitTest(surface.convert(center, to: surface.superview)) === button)
+                }
+                let first = try XCTUnwrap(buttons.first)
+                XCTAssertEqual(first.convert(first.bounds, to: surface).minX - backdrop.frame.minX, compact ? 4 : 8)
+                for point in [NSPoint(x: backdrop.frame.minX + 1, y: backdrop.frame.midY),
+                              NSPoint(x: backdrop.frame.maxX - 1, y: backdrop.frame.midY)] {
+                    XCTAssertTrue(surface.hitTest(surface.convert(point, to: surface.superview)) === surface)
+                    NSCursor.resizeLeftRight.set()
+                    let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: surface.convert(point, to: nil),
+                        modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0))
+                    surface.mouseMoved(with: event)
+                    XCTAssertTrue(NSCursor.current === NSCursor.arrow)
+                }
+                for point in [NSPoint(x: 3, y: 100), NSPoint(x: 60, y: 197)] {
+                    XCTAssertFalse(surface.edges(at: point).isEmpty)
+                    XCTAssertTrue(surface.hitTest(surface.convert(point, to: surface.superview)) === surface)
+                    let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: surface.convert(point, to: nil),
+                        modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0))
+                    surface.mouseMoved(with: event)
+                    XCTAssertTrue(NSCursor.current === surface.resizeCursor(at: point))
+                    XCTAssertFalse(NSCursor.current === NSCursor.arrow)
+                }
+                if width == 120 || width == 360 {
+                    let name = "pin-inset-toolbar-\(mode.rawValue)-\(Int(width))"
+                    try exportHoverArtwork(try renderHoverArtwork(surface, background: .white), name: name + "-white")
+                    try exportHoverArtwork(try renderHoverArtwork(surface, background: NSColor(white: 0.08, alpha: 1)), name: name + "-dark")
+                }
+            }
+        }
+    }
+
     func testHoverOutlineContrastsOnWhiteAndDarkWithinResizePerimeter() throws {
         let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
         defer { panel.close() }
@@ -883,6 +984,18 @@ final class PinPanelTests: XCTestCase {
                 for maximum in edgeMaximum { XCTAssertGreaterThan(maximum, 0.4, name + " must retain all four edges") }
                 XCTAssertEqual(interiorMaximum, 0)
                 try exportHoverArtwork(rendered, name: "pin-hover-outline-\(Int(size.width))-\(name)")
+                let whiteStroke = try XCTUnwrap(content.sublayers?.first { $0.name == "pin-hover-outline-stroke" })
+                whiteStroke.isHidden = true
+                let darkOnly = try renderHoverArtwork(outline)
+                var affine = CGAffineTransform(a: frame.m11, b: 0, c: 0, d: frame.m22, tx: frame.m41, ty: frame.m42)
+                let interior = CGPath(roundedRect: outline.bounds.insetBy(dx: 3.5, dy: 3.5), cornerWidth: 8, cornerHeight: 8, transform: &affine)
+                for y in 0..<height {
+                    for x in 0..<width where interior.contains(NSPoint(x: CGFloat(x) + 0.5, y: CGFloat(y) + 0.5)) {
+                        XCTAssertEqual(darkOnly.colorAt(x: x, y: y)?.alphaComponent, 0)
+                    }
+                }
+                try exportHoverArtwork(darkOnly, name: "pin-hover-shadow-\(Int(size.width))-\(name)")
+                whiteStroke.isHidden = false
             }
         }
     }
