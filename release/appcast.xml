@@ -7,6 +7,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.5</title>
+      <sparkle:version>20261026.7</sparkle:version>
+      <sparkle:shortVersionString>0.1.5</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Mon, 26 Oct 2026 03:47:51 +0000</pubDate>
+      <description>&lt;h2&gt;Pir 0.1.5&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;左侧工具条采用关闭、复原、缩放模式、复制顺序, 关闭按钮位于最左侧&lt;/li&gt;
+&lt;li&gt;复制成功时显示平滑过渡的勾选图标, 随后恢复复制按钮&lt;/li&gt;
+&lt;li&gt;图片支持裁剪填充与完整等比显示两种模式, 模式随会话保存&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;English&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Upper-left controls start with Close, followed by Restore, image scaling, and Copy&lt;/li&gt;
+&lt;li&gt;Successful copies show an animated checkmark before restoring the copy icon&lt;/li&gt;
+&lt;li&gt;Image pins switch between cover and fit, with the selected mode saved across restarts&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.5/Pir.Versions.0.1.5-20261026.7.zip" length="6721924" type="application/octet-stream" sparkle:edSignature="1hW7nYHS1pOG7e8FMIO79ZjxSs3s8tLrUmzAiVfm+bSVE17zkst9IOG8eWeA8r7VxXBgQseWb2KpQOfmIAoeBA=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.4</title>
       <sparkle:version>20261026.6</sparkle:version>
       <sparkle:shortVersionString>0.1.4</sparkle:shortVersionString>
@@ -52,6 +73,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: +htLNIE5JDp/0rq2X0B0qkjWgS0xaYqKce64Js/xLwLVcnJM75Qy0WTrSugOBXbH9x8n73R1JqHGD+NRsKT/CA==
-length: 4565
+edSignature: paNR5NGuOexwjXN0LVoWgmn4hGgtFy+fDrrFji4kIWJ2/Wc8hQFuvtuXAHBdNi7NSuo1l9f6ss/hcY1CAZ8YDw==
+length: 5916
 -->
