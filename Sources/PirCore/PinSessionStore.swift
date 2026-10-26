@@ -8,17 +8,20 @@ public struct PinRecord: Codable, Equatable {
     public let imagePointSize: CGSize?
     public let createdAt: Date
     public var isHidden: Bool
+    public var imageScaling: PinImageScaling
 
-    public init(id: UUID, kind: Kind, anchor: PinAnchor, imagePointSize: CGSize?, createdAt: Date = Date(), isHidden: Bool = false) {
+    public init(id: UUID, kind: Kind, anchor: PinAnchor, imagePointSize: CGSize?, createdAt: Date = Date(), isHidden: Bool = false,
+                imageScaling: PinImageScaling = .cover) {
         self.id = id
         self.kind = kind
         self.anchor = anchor
         self.imagePointSize = imagePointSize
         self.createdAt = createdAt
         self.isHidden = isHidden
+        self.imageScaling = imageScaling
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, anchor, imagePointSize, createdAt, isHidden }
+    private enum CodingKeys: String, CodingKey { case id, kind, anchor, imagePointSize, createdAt, isHidden, imageScaling }
 
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -28,6 +31,7 @@ public struct PinRecord: Codable, Equatable {
         imagePointSize = try values.decodeIfPresent(CGSize.self, forKey: .imagePointSize)
         createdAt = try values.decode(Date.self, forKey: .createdAt)
         isHidden = try values.decodeIfPresent(Bool.self, forKey: .isHidden) ?? false
+        imageScaling = (try? values.decode(PinImageScaling.self, forKey: .imageScaling)) ?? .cover
     }
 }
 

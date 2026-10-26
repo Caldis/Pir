@@ -220,6 +220,40 @@ final class PinSessionIntegrationTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(visiblePins().first).frame.size, expectedSize)
     }
 
+    func testImageScalingPersistsAcrossRestartAndPasteAgainWithoutRewritingImage() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PinSessionStore(root: root)
+        let manager = PinManager(store: store)
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 200,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        rep.bitmapData?.initialize(repeating: 255, count: rep.bytesPerRow * rep.pixelsHigh)
+        let image = NSImage(size: NSSize(width: 200, height: 100))
+        image.addRepresentation(rep)
+        let id = try XCTUnwrap(manager.show(.image(image)))
+        manager.flushSession()
+        let original = try XCTUnwrap(store.load().first)
+        let panel = try XCTUnwrap(visiblePins().first)
+        let frame = panel.frame
+        panel.setImageScaling(.fit, animated: false)
+        manager.flushSession()
+        let updated = try XCTUnwrap(store.load().first)
+        XCTAssertEqual(updated.record.imageScaling, .fit)
+        XCTAssertEqual(updated.data, original.data)
+        XCTAssertEqual(panel.frame, frame)
+        try manager.pasteAgain(id)
+        manager.flushSession()
+        XCTAssertEqual(try store.load().map(\.record.imageScaling), [.fit, .fit])
+        manager.closeAll()
+        let restored = PinManager(store: store)
+        restored.restoreSession()
+        restored.flushSession()
+        defer { restored.closeAll() }
+        XCTAssertEqual(visiblePins().count, 2)
+        XCTAssertTrue(visiblePins().allSatisfy { $0.imageScaling == .fit })
+    }
+
     func testFailedRestorationPreservesExistingSessionDuringFlushAndNewPins() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

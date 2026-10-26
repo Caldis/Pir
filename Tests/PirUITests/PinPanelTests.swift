@@ -371,11 +371,12 @@ final class PinPanelTests: XCTestCase {
         let overlay = try XCTUnwrap(panel.childWindows?.first)
         let content = try XCTUnwrap(overlay.contentView)
         content.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(overlay.frame.width, 116)
         XCTAssertFalse(panel.frame.intersects(overlay.frame))
         XCTAssertEqual(panel.frame, originalFrame)
         XCTAssertFalse(overlay.hasShadow)
         let buttons = content.subviews.compactMap { $0 as? NSStackView }.flatMap(\.arrangedSubviews).compactMap { $0 as? NSButton }
-        XCTAssertEqual(buttons.count, 3)
+        XCTAssertEqual(buttons.count, 4)
         let backdrop = try XCTUnwrap(content.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
         XCTAssertEqual(backdrop.layer?.cornerRadius, 10)
         XCTAssertTrue(backdrop.layer?.masksToBounds == true)
@@ -473,6 +474,134 @@ final class PinPanelTests: XCTestCase {
         return image
     }
 
+    func testControlsUseCloseFirstOrderForEveryContentKind() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let variants: [(ClipboardContent, [String])] = [
+            (.text("Toolbar order"), ["close-pin", "restore-pin", "copy-pin"]),
+            (.files(FilePinContent(urls: [URL(fileURLWithPath: "/tmp/toolbar.txt")])), ["close-pin", "restore-pin"]),
+            (.image(try transparentImage()), ["close-pin", "restore-pin", "image-scaling-pin", "copy-pin"])
+        ]
+        for (content, identifiers) in variants {
+            let panel = PinPanel(content: content, screen: screen, offset: 0)
+            defer { panel.close() }
+            let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+            surface.hoverAnimationDuration = 0
+            surface.setHovered(true)
+            XCTAssertEqual(try toolbarButtons(in: panel).compactMap { $0.identifier?.rawValue }, identifiers)
+        }
+    }
+
+    func testCopyFeedbackRepeatsThenRestoresWithNamedPasteboard() async throws {
+        let panel = PinPanel(content: .text("Copy feedback"), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        XCTAssertTrue(surface.copyContent(to: pasteboard))
+        XCTAssertEqual(pasteboard.string(forType: .string), "Copy feedback")
+        XCTAssertTrue(surface.isShowingCopySuccess)
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertTrue(surface.copyContent(to: pasteboard))
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertTrue(surface.isShowingCopySuccess, "Repeated successful copies restart the feedback interval")
+        try await Task.sleep(for: .milliseconds(600))
+        XCTAssertFalse(surface.isShowingCopySuccess)
+    }
+
+    func testFailedCopyClearsSuccessFeedback() throws {
+        let panel = PinPanel(content: .text("Failed copy"), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        XCTAssertTrue(surface.copyContent(to: pasteboard))
+        XCTAssertTrue(surface.isShowingCopySuccess)
+        XCTAssertFalse(surface.copyContent(to: RejectedPinCopyDestination()))
+        XCTAssertFalse(surface.isShowingCopySuccess)
+    }
+
+    func testImageModeChangesKeepFrameAndCopyOriginalBitmap() throws {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 320, pixelsHigh: 80,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.bitmapData?.initialize(repeating: 255, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        bitmap.size = NSSize(width: 160, height: 40)
+        let image = NSImage(size: bitmap.size)
+        image.addRepresentation(bitmap)
+        let panel = PinPanel(content: .image(image), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        panel.setFrame(NSRect(x: 100, y: 100, width: 120, height: 180), display: true)
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        let imageView = try XCTUnwrap(descendant(PinImageView.self, in: surface))
+        let frame = panel.frame
+        var changes: [PinImageScaling] = []
+        panel.onImageScalingChange = { changes.append($0) }
+        XCTAssertEqual(panel.imageScaling, .cover)
+        panel.setImageScaling(.fit, animated: false)
+        XCTAssertEqual(panel.imageScaling, .fit)
+        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspect)
+        XCTAssertEqual(panel.frame, frame)
+        panel.setImageScaling(.cover, animated: false)
+        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspectFill)
+        XCTAssertEqual(panel.frame, frame)
+        XCTAssertEqual(changes, [.fit, .cover])
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        XCTAssertTrue(surface.copyContent(to: pasteboard))
+        XCTAssertTrue(surface.isShowingCopySuccess)
+        let copied = try XCTUnwrap(pasteboard.data(forType: .tiff).flatMap(NSBitmapImageRep.init(data:)))
+        XCTAssertEqual(copied.pixelsWide, 320)
+        XCTAssertEqual(copied.pixelsHigh, 80)
+    }
+
+    func testFittedOpaqueImageKeepsTransparentLetterboxAndResizeInput() throws {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 320, pixelsHigh: 80,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.bitmapData?.initialize(repeating: 255, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        let image = NSImage(size: NSSize(width: 320, height: 80))
+        image.addRepresentation(bitmap)
+        let panel = PinPanel(content: .image(image), screen: try XCTUnwrap(NSScreen.main), offset: 0, imageScaling: .fit)
+        defer { panel.close() }
+        panel.setFrame(NSRect(x: 100, y: 100, width: 200, height: 200), display: true)
+        panel.orderFrontRegardless()
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.layoutSubtreeIfNeeded()
+        surface.displayIfNeeded()
+        CATransaction.flush()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+        let rendered = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 200, pixelsHigh: 200,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rendered))
+        surface.layer?.render(in: context.cgContext)
+        XCTAssertTrue(panel.hasShadow)
+        XCTAssertEqual(rendered.colorAt(x: 100, y: 20)?.alphaComponent, 0)
+        XCTAssertLessThanOrEqual((rendered.colorAt(x: 100, y: 3)?.alphaComponent ?? 1) * 255, 1.01)
+        for point in [NSPoint(x: 100, y: 3), NSPoint(x: 100, y: 197)] {
+            XCTAssertEqual(NSWindow.windowNumber(at: panel.convertPoint(toScreen: point), belowWindowWithWindowNumber: 0), panel.windowNumber)
+            XCTAssertTrue(surface.hitTest(surface.convert(point, to: surface.superview)) === surface)
+        }
+    }
+
+    func testRestoredImageModeInitializesWithoutChangingSavedFrame() throws {
+        let saved = NSRect(x: 100, y: 100, width: 140, height: 180)
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0,
+                             restoredFrame: saved, imageScaling: .fit)
+        defer { panel.close() }
+        XCTAssertEqual(panel.frame, saved)
+        XCTAssertEqual(panel.imageScaling, .fit)
+        let imageView = try XCTUnwrap(descendant(PinImageView.self, in: try XCTUnwrap(panel.contentView)))
+        XCTAssertEqual(imageView.layer?.contentsGravity, .resizeAspect)
+    }
+
+    private func toolbarButtons(in panel: PinPanel) throws -> [NSButton] {
+        let surface = try XCTUnwrap(panel.contentView)
+        let host = panel.childWindows?.first?.contentView ?? surface
+        let stack = try XCTUnwrap(host.subviews.compactMap { $0 as? NSStackView }.first)
+        return stack.arrangedSubviews.compactMap { $0 as? NSButton }
+    }
+
     func testLargeTextRepeatedResizeUsesTextKitTwoViewport() throws {
         let screen = try XCTUnwrap(NSScreen.main)
         let source = String(repeating: "  let value = 1234567890; // viewport layout\n\tIndented second line with 中文\n", count: 10_000)
@@ -515,4 +644,10 @@ final class PinPanelTests: XCTestCase {
         }
         return count
     }
+}
+
+private final class RejectedPinCopyDestination: PinCopyDestination {
+    func clearContents() -> Int { 0 }
+    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool { false }
+    func writeObjects(_ objects: [NSPasteboardWriting]) -> Bool { false }
 }

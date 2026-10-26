@@ -108,3 +108,6 @@
 "Read Only" = "Read Only";
 "Write Only" = "Write Only";
 "No Access" = "No Access";
+"Fit entire image" = "Fit entire image";
+"Fill image frame" = "Fill image frame";
+"Copied" = "Copied";

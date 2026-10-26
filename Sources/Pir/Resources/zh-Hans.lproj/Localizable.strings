@@ -108,3 +108,6 @@
 "Read Only" = "只读";
 "Write Only" = "只写";
 "No Access" = "无访问权限";
+"Fit entire image" = "完整显示图片";
+"Fill image frame" = "裁剪填满窗口";
+"Copied" = "已复制";

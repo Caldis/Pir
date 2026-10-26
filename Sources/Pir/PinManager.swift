@@ -129,7 +129,8 @@ final class PinManager: ObservableObject {
             }
             let bytes = byteCost(content)
             guard pins.count < Self.maximumPins, estimatedBytes + bytes <= Self.maximumBytes else { continue }
-            let panel = PinPanel(content: content, screen: screen, offset: pins.count, restoredFrame: placement.frame)
+            let panel = PinPanel(content: content, screen: screen, offset: pins.count, restoredFrame: placement.frame,
+                                 imageScaling: record.imageScaling)
             register(panel: panel, record: record, bytes: bytes, content: content)
         }
         scheduleSave()
@@ -137,7 +138,7 @@ final class PinManager: ObservableObject {
     }
 
     @discardableResult
-    func show(_ content: ClipboardContent, on preferredScreen: NSScreen? = nil) throws -> UUID? {
+    func show(_ content: ClipboardContent, on preferredScreen: NSScreen? = nil, imageScaling: PinImageScaling = .cover) throws -> UUID? {
         if restorationStarted, !restorationFinished { finishRestoration() }
         if case .files(let files) = content, !files.isValid { throw ClipboardError.unsupported }
         let bytes = byteCost(content)
@@ -145,7 +146,7 @@ final class PinManager: ObservableObject {
         guard let screen = preferredScreen ?? NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main,
               let display = display(screen) else { return nil }
         let id = UUID()
-        let panel = PinPanel(content: content, screen: screen, offset: pins.count)
+        let panel = PinPanel(content: content, screen: screen, offset: pins.count, imageScaling: imageScaling)
         let kind: PinRecord.Kind
         var imageSize: NSSize?
         switch content {
@@ -153,7 +154,8 @@ final class PinManager: ObservableObject {
         case .text: kind = .text
         case .files: kind = .files
         }
-        let record = PinRecord(id: id, kind: kind, anchor: PinAnchor(frame: panel.frame, display: display), imagePointSize: imageSize)
+        let record = PinRecord(id: id, kind: kind, anchor: PinAnchor(frame: panel.frame, display: display),
+                               imagePointSize: imageSize, imageScaling: panel.imageScaling)
         register(panel: panel, record: record, bytes: bytes, content: content)
         persistContent(content, id: id)
         if !restorationStarted { restorationStarted = true; restorationFinished = true }
@@ -198,6 +200,12 @@ final class PinManager: ObservableObject {
         }
         panel.onTextChange = { [weak self] text in self?.updateContent(.text(text), for: id) }
         panel.onFilesChange = { [weak self] files in self?.updateContent(.files(files), for: id) }
+        panel.onImageScalingChange = { [weak self] scaling in
+            guard let self, var pin = self.pins[id], pin.record.kind == .image else { return }
+            pin.record.imageScaling = scaling
+            self.pins[id] = pin
+            self.scheduleSave()
+        }
         let title: String
         switch content {
         case .text(let text):
@@ -258,7 +266,7 @@ final class PinManager: ObservableObject {
     func pasteAgain(_ id: UUID) throws {
         if restorationStarted, !restorationFinished { finishRestoration() }
         guard let pin = pins[id] else { return }
-        try show(pin.content)
+        try show(pin.content, imageScaling: pin.record.imageScaling)
     }
 
     func deleteAll() {

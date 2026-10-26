@@ -13,12 +13,14 @@ final class PinPanel: NSPanel, NSWindowDelegate {
     var onTextChange: ((String) -> Void)?
     var acceptsTextSize: ((Int) -> Bool)?
     var onFilesChange: ((FilePinContent) -> Void)?
+    var onImageScalingChange: ((PinImageScaling) -> Void)?
+    var imageScaling: PinImageScaling { (contentView as? PinSurface)?.imageScaling ?? .cover }
     private let naturalSize: NSSize
     private var naturalText: String?
     private var naturalFiles: FilePinContent?
     private let acceptsKeyboardInput: Bool
 
-    init(content: ClipboardContent, screen: NSScreen, offset: Int, restoredFrame: NSRect? = nil) {
+    init(content: ClipboardContent, screen: NSScreen, offset: Int, restoredFrame: NSRect? = nil, imageScaling: PinImageScaling = .cover) {
         let preferred: NSSize
         if case .image = content { acceptsKeyboardInput = false } else { acceptsKeyboardInput = true }
         switch content {
@@ -55,7 +57,7 @@ final class PinPanel: NSPanel, NSWindowDelegate {
         backgroundColor = .clear
         isOpaque = false
         acceptsMouseMovedEvents = true
-        let surface = PinSurface(content: content)
+        let surface = PinSurface(content: content, imageScaling: imageScaling)
         // WindowServer derives its shadow outline from content alpha, including captured shadows.
         hasShadow = surface.usesWindowShadow
         surface.onClose = { [weak self] in self?.close() }
@@ -71,6 +73,7 @@ final class PinPanel: NSPanel, NSWindowDelegate {
             onFilesChange?(files)
             fitFileHeight()
         }
+        surface.onImageScalingChange = { [weak self] mode in self?.onImageScalingChange?(mode) }
         surface.acceptsTextSize = { [weak self] bytes in self?.acceptsTextSize?(bytes) ?? true }
         contentView = surface
         delegate = self
@@ -88,6 +91,10 @@ final class PinPanel: NSPanel, NSWindowDelegate {
     }
 
     func userDidChangeFrame() { onFrameChange?(frame) }
+
+    func setImageScaling(_ mode: PinImageScaling, animated: Bool = true) {
+        (contentView as? PinSurface)?.setImageScaling(mode, animated: animated)
+    }
 
     override func performDrag(with event: NSEvent) {
         beginUserMove()
@@ -176,11 +183,24 @@ final class PinPanel: NSPanel, NSWindowDelegate {
     }
 }
 
+protocol PinCopyDestination {
+    @discardableResult func clearContents() -> Int
+    func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
+    func writeObjects(_ objects: [NSPasteboardWriting]) -> Bool
+}
+
+extension NSPasteboard: PinCopyDestination {}
+
 final class PinSurface: NSView, NSTextViewDelegate {
     private(set) var usesWindowShadow = true
     private let closeButton = PinControlButton()
     private let restoreButton = PinControlButton()
     private let copyButton = PinControlButton()
+    private let scalingButton = PinControlButton()
+    private var imageView: PinImageView?
+    private(set) var imageScaling: PinImageScaling
+    private var copyFeedbackReset: DispatchWorkItem?
+    private(set) var isShowingCopySuccess = false
     private let content: ClipboardContent
     private var textEditor: NSTextView?
     private var filesView: PinFilesView?
@@ -202,9 +222,12 @@ final class PinSurface: NSView, NSTextViewDelegate {
     var onTextChange: ((String) -> Void)?
     var acceptsTextSize: ((Int) -> Bool)?
     var onFilesChange: ((FilePinContent) -> Void)?
+    var onImageScalingChange: ((PinImageScaling) -> Void)?
 
-    init(content: ClipboardContent) {
+    init(content: ClipboardContent, imageScaling: PinImageScaling = .cover) {
         self.content = content
+        if case .image = content { self.imageScaling = imageScaling }
+        else { self.imageScaling = .cover }
         super.init(frame: .zero)
         wantsLayer = true
         layer?.masksToBounds = true
@@ -212,7 +235,8 @@ final class PinSurface: NSView, NSTextViewDelegate {
         let body: NSView
         switch content {
         case .image(let image):
-            let imageView = PinImageView(image: image)
+            let imageView = PinImageView(image: image, scaling: imageScaling)
+            self.imageView = imageView
             usesWindowShadow = !imageView.hasTransparentEdges
             body = imageView
         case .files(let files):
@@ -259,8 +283,8 @@ final class PinSurface: NSView, NSTextViewDelegate {
             body = scroll
         }
         layer?.cornerRadius = usesWindowShadow ? 10 : 0
-        if !usesWindowShadow {
-            // WindowServer skips zero-alpha pixels before NSView hit testing. Only resize edges receive this input fill.
+        if imageView != nil {
+            // WindowServer skips zero-alpha pixels, including image fit letterboxing, before NSView hit testing.
             transparentInputRing.fillColor = NSColor.black.withAlphaComponent(Self.transparentInputAlpha).cgColor
             transparentInputRing.fillRule = .evenOdd
             layer?.addSublayer(transparentInputRing)
@@ -301,11 +325,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         restoreButton.toolTip = L("Restore natural size")
         restoreButton.identifier = NSUserInterfaceItemIdentifier("restore-pin")
         restoreButton.setAccessibilityLabel(L("Restore natural size"))
-        copyButton.image = NSImage(systemSymbolName: "doc.on.doc.fill", accessibilityDescription: L("Copy content"))?.withSymbolConfiguration(
-            NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
-        if let image = copyButton.image {
-            image.size = NSSize(width: image.size.width * 13 / image.size.height, height: 13)
-        }
+        copyButton.image = copySymbol(success: false)
         copyButton.contentTintColor = .white
         copyButton.bezelStyle = .circular
         copyButton.isBordered = false
@@ -314,11 +334,19 @@ final class PinSurface: NSView, NSTextViewDelegate {
         copyButton.toolTip = L("Copy content")
         copyButton.identifier = NSUserInterfaceItemIdentifier("copy-pin")
         copyButton.setAccessibilityLabel(L("Copy content"))
+        scalingButton.contentTintColor = .white
+        scalingButton.bezelStyle = .circular
+        scalingButton.isBordered = false
+        scalingButton.target = self
+        scalingButton.action = #selector(toggleImageScaling)
+        scalingButton.identifier = NSUserInterfaceItemIdentifier("image-scaling-pin")
+        updateScalingButton(animated: false)
         controls.orientation = .horizontal
         controls.spacing = 4
-        if filesView == nil { controls.addArrangedSubview(copyButton) }
-        controls.addArrangedSubview(restoreButton)
         controls.addArrangedSubview(closeButton)
+        controls.addArrangedSubview(restoreButton)
+        if imageView != nil { controls.addArrangedSubview(scalingButton) }
+        if filesView == nil { controls.addArrangedSubview(copyButton) }
         controls.translatesAutoresizingMaskIntoConstraints = false
         controls.isHidden = true
         controlsBackdrop.translatesAutoresizingMaskIntoConstraints = false
@@ -332,7 +360,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         if usesWindowShadow {
             controlsParent = self
         } else {
-            let host = PinHoverHost(frame: NSRect(x: 0, y: 0, width: 104, height: 40))
+            let host = PinHoverHost(frame: NSRect(x: 0, y: 0, width: controlsWidth, height: 40))
             host.onEnter = { [weak self] in self?.setHovered(true) }
             host.onExit = { [weak self] in self?.scheduleHoverExit() }
             hoverHost = host
@@ -347,11 +375,12 @@ final class PinSurface: NSView, NSTextViewDelegate {
             hoverOutline.bottomAnchor.constraint(equalTo: bottomAnchor),
             controlsBackdrop.topAnchor.constraint(equalTo: controlsParent.topAnchor),
             controlsBackdrop.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor),
-            controlsBackdrop.widthAnchor.constraint(equalToConstant: usesWindowShadow ? 140 : 104),
+            controlsBackdrop.widthAnchor.constraint(equalToConstant: usesWindowShadow ? 140 : controlsWidth),
             controlsBackdrop.heightAnchor.constraint(equalToConstant: usesWindowShadow ? 64 : 40),
             controls.topAnchor.constraint(equalTo: controlsParent.topAnchor, constant: 8),
             controls.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor, constant: 8),
             copyButton.widthAnchor.constraint(equalToConstant: 22), copyButton.heightAnchor.constraint(equalToConstant: 22),
+            scalingButton.widthAnchor.constraint(equalToConstant: 22), scalingButton.heightAnchor.constraint(equalToConstant: 22),
             closeButton.widthAnchor.constraint(equalToConstant: 22), closeButton.heightAnchor.constraint(equalToConstant: 22),
             restoreButton.widthAnchor.constraint(equalToConstant: 22), restoreButton.heightAnchor.constraint(equalToConstant: 22)
         ])
@@ -360,13 +389,70 @@ final class PinSurface: NSView, NSTextViewDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     @objc private func closePin() { onClose?() }
     @objc private func restoreSize() { onRestore?() }
-    @objc private func copyPin() { copyContent(to: .general) }
+    @objc private func copyPin() { copyContent(to: NSPasteboard.general) }
 
-    func copyContent(to pasteboard: NSPasteboard) {
+    @discardableResult
+    func copyContent(to pasteboard: PinCopyDestination) -> Bool {
         pasteboard.clearContents()
-        if let textEditor { pasteboard.setString(textEditor.string, forType: .string) }
-        else if let filesView { pasteboard.writeObjects(filesView.content.urls.map { $0 as NSURL }) }
-        else if case .image(let image) = content { pasteboard.writeObjects([image]) }
+        let succeeded: Bool
+        if let textEditor { succeeded = pasteboard.setString(textEditor.string, forType: .string) }
+        else if let filesView { succeeded = pasteboard.writeObjects(filesView.content.urls.map { $0 as NSURL }) }
+        else if case .image(let image) = content { succeeded = pasteboard.writeObjects([image]) }
+        else { succeeded = false }
+        if filesView == nil { setCopyFeedback(succeeded) }
+        return succeeded
+    }
+
+    private func copySymbol(success: Bool) -> NSImage? {
+        let symbol = success ? "checkmark" : "doc.on.doc.fill"
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: L(success ? "Copied" : "Copy content"))?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
+        if let image { image.size = NSSize(width: image.size.width * 13 / image.size.height, height: 13) }
+        return image
+    }
+
+    private func setCopyFeedback(_ succeeded: Bool) {
+        copyFeedbackReset?.cancel()
+        copyFeedbackReset = nil
+        isShowingCopySuccess = succeeded
+        copyButton.setImage(copySymbol(success: succeeded), animated: true)
+        copyButton.setAccessibilityValue(succeeded ? L("Copied") : nil)
+        guard succeeded else { return }
+        let reset = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            isShowingCopySuccess = false
+            copyButton.setImage(copySymbol(success: false), animated: true)
+            copyButton.setAccessibilityValue(nil)
+            copyFeedbackReset = nil
+        }
+        copyFeedbackReset = reset
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: reset)
+    }
+
+    @objc private func toggleImageScaling() {
+        setImageScaling(imageScaling == .cover ? .fit : .cover)
+    }
+
+    func setImageScaling(_ mode: PinImageScaling, animated: Bool = true) {
+        guard let imageView, imageScaling != mode else { return }
+        imageScaling = mode
+        imageView.setScaling(mode, animated: animated)
+        updateScalingButton(animated: animated)
+        onImageScalingChange?(mode)
+    }
+
+    private func updateScalingButton(animated: Bool) {
+        let fit = imageScaling == .cover
+        let label = L(fit ? "Fit entire image" : "Fill image frame")
+        let image = NSImage(systemSymbolName: fit ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                            accessibilityDescription: label)?.withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular))
+        scalingButton.setImage(image, animated: animated)
+        scalingButton.toolTip = label
+        scalingButton.setAccessibilityLabel(label)
+    }
+
+    private var controlsWidth: CGFloat {
+        CGFloat(controls.arrangedSubviews.count) * 22 + CGFloat(max(0, controls.arrangedSubviews.count - 1)) * 4 + 16
     }
 
     func textDidChange(_ notification: Notification) {
@@ -513,11 +599,13 @@ final class PinSurface: NSView, NSTextViewDelegate {
         let visible = window.screen?.visibleFrame ?? window.frame
         let above = window.frame.maxY + 2
         let y = above + 40 <= visible.maxY ? above : max(visible.minY, window.frame.minY - 42)
-        panel.setFrame(NSRect(x: min(max(window.frame.minX, visible.minX), visible.maxX - 104), y: y, width: 104, height: 40), display: true)
+        panel.setFrame(NSRect(x: min(max(window.frame.minX, visible.minX), visible.maxX - controlsWidth), y: y, width: controlsWidth, height: 40), display: true)
         host.layoutSubtreeIfNeeded()
     }
 
     func closeHoverControls() {
+        copyFeedbackReset?.cancel()
+        copyFeedbackReset = nil
         exitGeneration += 1
         hoverGeneration += 1
         if let hoverPanel {
@@ -529,7 +617,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
 
     override func layout() {
         super.layout()
-        guard !usesWindowShadow else { return }
+        guard imageView != nil else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         transparentInputRing.frame = bounds
@@ -555,7 +643,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
         if isHovered, hoverHost == nil {
-            for button in [copyButton, closeButton, restoreButton] where button.convert(button.bounds, to: self).contains(local) {
+            for button in controls.arrangedSubviews.compactMap({ $0 as? NSButton }) where button.convert(button.bounds, to: self).contains(local) {
                 return button
             }
             if controls.frame.contains(local) { return controls }
@@ -611,7 +699,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         addCursorRect(NSRect(x: 0, y: bounds.height - d, width: d, height: d), cursor: Self.diagonalDown)
         addCursorRect(NSRect(x: bounds.width - d, y: 0, width: d, height: d), cursor: Self.diagonalDown)
         if isHovered, hoverHost == nil {
-            for button in [copyButton, closeButton, restoreButton] { addCursorRect(button.convert(button.bounds, to: self), cursor: .arrow) }
+            for button in controls.arrangedSubviews.compactMap({ $0 as? NSButton }) { addCursorRect(button.convert(button.bounds, to: self), cursor: .arrow) }
         }
     }
 
@@ -689,6 +777,20 @@ private final class PinControlButton: NSButton {
         let cell = PinControlButtonCell()
         cell.highlightsBy = []
         self.cell = cell
+    }
+
+    func setImage(_ image: NSImage?, animated: Bool) {
+        wantsLayer = true
+        if animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            displayIfNeeded()
+            let transition = CATransition()
+            transition.type = .fade
+            transition.duration = 0.18
+            transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            layer?.add(transition, forKey: "pin-symbol")
+        } else { layer?.removeAnimation(forKey: "pin-symbol") }
+        self.image = image
+        needsDisplay = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -771,7 +873,7 @@ private final class PinControlsBackdrop: NSView {
 final class PinImageView: NSView {
     let hasTransparentEdges: Bool
 
-    init(image: NSImage) {
+    init(image: NSImage, scaling: PinImageScaling = .cover) {
         let bitmap = image.representations.compactMap { ($0 as? NSBitmapImageRep)?.cgImage }.first
             ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         hasTransparentEdges = bitmap.map(PinImageAppearance.hasTransparentEdges(in:)) ?? true
@@ -779,10 +881,24 @@ final class PinImageView: NSView {
         wantsLayer = true
         // Use the retained bitmap directly; resolving NSImage at a large point size can upscale it.
         layer?.contents = bitmap
-        layer?.contentsGravity = .resizeAspectFill
+        layer?.contentsGravity = scaling == .cover ? .resizeAspectFill : .resizeAspect
         layer?.masksToBounds = true
         layer?.minificationFilter = .trilinear
         layer?.magnificationFilter = .linear
+    }
+
+    func setScaling(_ scaling: PinImageScaling, animated: Bool) {
+        if animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let transition = CATransition()
+            transition.type = .fade
+            transition.duration = 0.20
+            transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            layer?.add(transition, forKey: "pin-image-scaling")
+        } else { layer?.removeAnimation(forKey: "pin-image-scaling") }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.contentsGravity = scaling == .cover ? .resizeAspectFill : .resizeAspect
+        CATransaction.commit()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
