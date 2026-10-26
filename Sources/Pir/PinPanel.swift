@@ -211,9 +211,12 @@ final class PinSurface: NSView, NSTextViewDelegate {
     static let transparentInputAlpha: CGFloat = 1 / 255
     static let resizeInset: CGFloat = 6.5
     private var tracking: NSTrackingArea?
+    private var cursorTracking: NSTrackingArea?
+    private var activeResizeCursor: NSCursor?
     private var hoverPanel: PinHoverPanel?
     private var hoverHost: PinHoverHost?
     private var isHovered = false
+    private var outlineIsVisible = false
     private var hoverGeneration = 0
     private var exitGeneration = 0
     var hoverAnimationDuration: TimeInterval = 0.18
@@ -356,6 +359,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         hoverOutline.identifier = NSUserInterfaceItemIdentifier("pin-hover-outline")
         hoverOutline.isHidden = true
         addSubview(hoverOutline)
+        controlsBackdrop.setUniformFill(imageView != nil)
         let controlsParent: NSView
         if usesWindowShadow {
             controlsParent = self
@@ -375,8 +379,8 @@ final class PinSurface: NSView, NSTextViewDelegate {
             hoverOutline.bottomAnchor.constraint(equalTo: bottomAnchor),
             controlsBackdrop.topAnchor.constraint(equalTo: controlsParent.topAnchor),
             controlsBackdrop.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor),
-            controlsBackdrop.widthAnchor.constraint(equalToConstant: usesWindowShadow ? 140 : controlsWidth),
-            controlsBackdrop.heightAnchor.constraint(equalToConstant: usesWindowShadow ? 64 : 40),
+            controlsBackdrop.widthAnchor.constraint(equalToConstant: imageView == nil ? 140 : controlsWidth),
+            controlsBackdrop.heightAnchor.constraint(equalToConstant: imageView == nil ? 64 : 40),
             controls.topAnchor.constraint(equalTo: controlsParent.topAnchor, constant: 8),
             controls.leadingAnchor.constraint(equalTo: controlsParent.leadingAnchor, constant: 8),
             copyButton.widthAnchor.constraint(equalToConstant: 22), copyButton.heightAnchor.constraint(equalToConstant: 22),
@@ -438,6 +442,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         imageScaling = mode
         imageView.setScaling(mode, animated: animated)
         updateScalingButton(animated: animated)
+        refreshHoverOutline(animated: animated)
         onImageScalingChange?(mode)
     }
 
@@ -476,14 +481,24 @@ final class PinSurface: NSView, NSTextViewDelegate {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .cursorUpdate, .activeAlways, .inVisibleRect], owner: self)
+        if let cursorTracking { removeTrackingArea(cursorTracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self)
         addTrackingArea(area)
         tracking = area
+        // AppKit suppresses cursorUpdate for activeAlways areas, so cursor requests use a separate activation policy.
+        let cursorArea = NSTrackingArea(rect: .zero, options: [.cursorUpdate, .activeInActiveApp, .inVisibleRect], owner: self)
+        addTrackingArea(cursorArea)
+        cursorTracking = cursorArea
         window?.invalidateCursorRects(for: self)
     }
 
-    override func mouseEntered(with event: NSEvent) { setHovered(true) }
+    override func mouseEntered(with event: NSEvent) {
+        setHovered(true)
+        updateCursor(with: event)
+    }
     override func mouseExited(with event: NSEvent) {
+        if let activeResizeCursor { activeResizeCursor.set() }
+        else { NSCursor.arrow.set() }
         if hoverHost == nil { setHovered(false) }
         else { scheduleHoverExit() }
     }
@@ -503,10 +518,10 @@ final class PinSurface: NSView, NSTextViewDelegate {
     func setHovered(_ hovered: Bool) {
         exitGeneration += 1
         guard isHovered != hovered else { return }
+        layoutSubtreeIfNeeded()
         isHovered = hovered
         hoverGeneration += 1
         let generation = hoverGeneration
-        layoutSubtreeIfNeeded()
         let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : hoverAnimationDuration
         if hovered {
             positionHoverControls()
@@ -514,10 +529,11 @@ final class PinSurface: NSView, NSTextViewDelegate {
             hoverPanel?.ignoresMouseEvents = false
             if window?.isVisible == true { hoverPanel?.orderFrontRegardless() }
         }
-        let animated = [controlsBackdrop, controls] + (usesWindowShadow ? [] : [hoverOutline])
+        let animated = [controlsBackdrop, controls]
         for view in animated {
             animateHover(view, visible: hovered, zoom: !usesWindowShadow && view !== controlsBackdrop, duration: duration)
         }
+        refreshHoverOutline(animated: true)
         if !hovered {
             if duration == 0 { hideHoverPanel() }
             else {
@@ -528,6 +544,16 @@ final class PinSurface: NSView, NSTextViewDelegate {
             }
         }
         window?.invalidateCursorRects(for: self)
+    }
+
+    private func refreshHoverOutline(animated: Bool) {
+        guard let imageView else { return }
+        let hasVisibleBounds = imageView.hasTransparentEdges || (imageScaling == .fit && imageView.hasLetterboxing(in: bounds.size))
+        let visible = isHovered && hasVisibleBounds
+        guard outlineIsVisible != visible else { return }
+        outlineIsVisible = visible
+        let duration = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? hoverAnimationDuration : 0
+        animateHover(hoverOutline, visible: visible, zoom: !usesWindowShadow, duration: duration)
     }
 
     private func hideHoverPanel() {
@@ -544,15 +570,19 @@ final class PinSurface: NSView, NSTextViewDelegate {
         view.wantsLayer = true
         guard let layer = view.layer else { return }
         let fromOpacity = view.isHidden ? Float(0) : layer.presentation()?.opacity ?? layer.opacity
-        let fromTransform = view.isHidden ? hoverTransform(for: view, scale: 0.92) : layer.presentation()?.transform ?? layer.transform
+        let transformLayer = (view as? PinHoverOutline)?.contentLayer ?? layer
+        let maximumDimension = max(1, max(view.bounds.width, view.bounds.height))
+        let hiddenScale: CGFloat = view is PinHoverOutline ? max(0.92, 1 - 4 / maximumDimension) : 0.92
+        let fromTransform = view.isHidden ? hoverTransform(for: view, scale: hiddenScale) : transformLayer.presentation()?.transform ?? transformLayer.transform
         layer.removeAnimation(forKey: "pin-hover")
+        transformLayer.removeAnimation(forKey: "pin-hover-zoom")
         view.isHidden = false
         let targetOpacity: Float = visible ? 1 : 0
-        let targetTransform = hoverTransform(for: view, scale: visible || !zoom ? 1 : 0.92)
+        let targetTransform = hoverTransform(for: view, scale: visible || !zoom ? 1 : hiddenScale)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.opacity = targetOpacity
-        layer.transform = targetTransform
+        transformLayer.transform = targetTransform
         CATransaction.commit()
         guard duration > 0 else { view.isHidden = !visible; return }
         let opacity = CABasicAnimation(keyPath: "opacity")
@@ -563,7 +593,12 @@ final class PinSurface: NSView, NSTextViewDelegate {
             let transform = CABasicAnimation(keyPath: "transform")
             transform.fromValue = NSValue(caTransform3D: fromTransform)
             transform.toValue = NSValue(caTransform3D: targetTransform)
-            animations.append(transform)
+            if transformLayer === layer { animations.append(transform) }
+            else {
+                transform.duration = duration
+                transform.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                transformLayer.add(transform, forKey: "pin-hover-zoom")
+            }
         }
         let group = CAAnimationGroup()
         group.animations = animations
@@ -573,7 +608,7 @@ final class PinSurface: NSView, NSTextViewDelegate {
         if !visible {
             let generation = hoverGeneration
             DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self, weak view] in
-                guard let self, generation == hoverGeneration, !isHovered else { return }
+                guard let self, generation == hoverGeneration, view?.layer?.opacity == 0 else { return }
                 view?.isHidden = true
             }
         }
@@ -626,17 +661,19 @@ final class PinSurface: NSView, NSTextViewDelegate {
         path.addRect(bounds.insetBy(dx: Self.resizeInset, dy: Self.resizeInset))
         transparentInputRing.path = path
         CATransaction.commit()
+        refreshHoverOutline(animated: false)
     }
 
     override func mouseMoved(with event: NSEvent) { updateCursor(with: event) }
     override func cursorUpdate(with event: NSEvent) { updateCursor(with: event) }
 
     private func updateCursor(with event: NSEvent) {
-        resizeCursor(at: convert(event.locationInWindow, from: nil)).set()
+        (activeResizeCursor ?? resizeCursor(at: convert(event.locationInWindow, from: nil))).set()
     }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        refreshHoverOutline(animated: false)
         window?.invalidateCursorRects(for: self)
     }
 
@@ -727,9 +764,11 @@ final class PinSurface: NSView, NSTextViewDelegate {
         let initialFrame = window.frame
         let start = window.convertPoint(toScreen: event.locationInWindow)
         let resizeCursor = cursor(for: selectedEdges)
+        activeResizeCursor = resizeCursor
         window.disableCursorRects()
         resizeCursor.push()
         defer {
+            activeResizeCursor = nil
             NSCursor.pop()
             window.enableCursorRects()
             window.invalidateCursorRects(for: self)
@@ -762,12 +801,15 @@ private final class PinHoverHost: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let tracking { removeTrackingArea(tracking) }
-        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect], owner: self)
         addTrackingArea(area)
         tracking = area
     }
 
-    override func mouseEntered(with event: NSEvent) { onEnter?() }
+    override func mouseEntered(with event: NSEvent) { NSCursor.arrow.set(); onEnter?() }
+    override func mouseMoved(with event: NSEvent) { NSCursor.arrow.set() }
+    override func cursorUpdate(with event: NSEvent) { NSCursor.arrow.set() }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
     override func mouseExited(with event: NSEvent) { onExit?() }
 }
 
@@ -811,17 +853,38 @@ private final class PinControlButtonCell: NSButtonCell {
 }
 
 private final class PinHoverOutline: NSView {
+    let contentLayer = CALayer()
+    private let contrast = CAShapeLayer()
     private let stroke = CAShapeLayer()
+    private let edgeMask = CAShapeLayer()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         setAccessibilityElement(false)
+        contrast.name = "pin-hover-outline-contrast"
+        contrast.fillColor = nil
+        contrast.strokeColor = NSColor.black.withAlphaComponent(0.5).cgColor
+        contrast.lineWidth = 2.5
+        contrast.lineDashPattern = [4, 4]
+        contrast.shadowColor = NSColor.black.cgColor
+        contrast.shadowOpacity = 0.25
+        contrast.shadowRadius = 0.6
+        contrast.shadowOffset = .zero
+        stroke.name = "pin-hover-outline-stroke"
         stroke.fillColor = nil
-        stroke.strokeColor = NSColor.white.withAlphaComponent(0.85).cgColor
+        stroke.strokeColor = NSColor.white.withAlphaComponent(0.9).cgColor
         stroke.lineWidth = 1
         stroke.lineDashPattern = [4, 4]
-        layer?.addSublayer(stroke)
+        edgeMask.fillRule = .evenOdd
+        edgeMask.fillColor = NSColor.black.cgColor
+        contentLayer.name = "pin-hover-outline-content"
+        contentLayer.anchorPoint = .zero
+        contentLayer.addSublayer(contrast)
+        contentLayer.addSublayer(stroke)
+        layer?.addSublayer(contentLayer)
+        // The mask stays stationary while the stroke zooms, retaining the existing resize input perimeter.
+        layer?.mask = edgeMask
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -830,8 +893,19 @@ private final class PinHoverOutline: NSView {
         super.layout()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        stroke.frame = bounds
-        stroke.path = CGPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), cornerWidth: 9, cornerHeight: 9, transform: nil)
+        contentLayer.bounds = bounds
+        contentLayer.position = bounds.origin
+        // Half-point alignment gives the one-point white stroke a complete pixel at 1x scale.
+        let outline = CGPath(roundedRect: bounds.insetBy(dx: 2.5, dy: 2.5), cornerWidth: 9, cornerHeight: 9, transform: nil)
+        for line in [contrast, stroke] {
+            line.frame = bounds
+            line.path = outline
+        }
+        edgeMask.frame = bounds
+        let inputBounds = CGMutablePath()
+        inputBounds.addRect(bounds)
+        inputBounds.addRect(bounds.insetBy(dx: PinSurface.resizeInset, dy: PinSurface.resizeInset))
+        edgeMask.path = inputBounds
         CATransaction.commit()
     }
 
@@ -857,6 +931,12 @@ private final class PinControlsBackdrop: NSView {
         layer?.addSublayer(gradient)
     }
 
+    func setUniformFill(_ uniform: Bool) {
+        if uniform { gradient.removeFromSuperlayer() }
+        else if gradient.superlayer == nil { layer?.addSublayer(gradient) }
+        layer?.backgroundColor = uniform ? NSColor.black.withAlphaComponent(0.5).cgColor : nil
+    }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
     override func layout() {
@@ -872,8 +952,10 @@ private final class PinControlsBackdrop: NSView {
 
 final class PinImageView: NSView {
     let hasTransparentEdges: Bool
+    private let imageSize: NSSize
 
     init(image: NSImage, scaling: PinImageScaling = .cover) {
+        imageSize = image.size
         let bitmap = image.representations.compactMap { ($0 as? NSBitmapImageRep)?.cgImage }.first
             ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         hasTransparentEdges = bitmap.map(PinImageAppearance.hasTransparentEdges(in:)) ?? true
@@ -885,6 +967,12 @@ final class PinImageView: NSView {
         layer?.masksToBounds = true
         layer?.minificationFilter = .trilinear
         layer?.magnificationFilter = .linear
+    }
+
+    func hasLetterboxing(in size: NSSize) -> Bool {
+        guard imageSize.width > 0, imageSize.height > 0, size.width > 0, size.height > 0 else { return false }
+        let scale = min(size.width / imageSize.width, size.height / imageSize.height)
+        return size.width - imageSize.width * scale > 0.5 || size.height - imageSize.height * scale > 0.5
     }
 
     func setScaling(_ scaling: PinImageScaling, animated: Bool) {

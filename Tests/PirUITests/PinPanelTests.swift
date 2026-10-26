@@ -180,7 +180,13 @@ final class PinPanelTests: XCTestCase {
                                                  modifierFlags: [], timestamp: 2, windowNumber: window.windowNumber,
                                                  context: nil, eventNumber: 2, clickCount: 1, pressure: 0))
         var seen = false
-        window.onResize = { seen = NSCursor.current === NSCursor.resizeLeftRight }
+        window.onResize = {
+            seen = NSCursor.current === NSCursor.resizeLeftRight
+            surface.mouseEntered(with: down)
+            surface.mouseMoved(with: down)
+            surface.mouseExited(with: down)
+            XCTAssertTrue(NSCursor.current === NSCursor.resizeLeftRight)
+        }
         NSCursor.arrow.set()
         NSApp.postEvent(up, atStart: true)
         NSApp.postEvent(dragged, atStart: true)
@@ -348,7 +354,8 @@ final class PinPanelTests: XCTestCase {
             XCTAssertEqual(outline.isHidden, alpha == 255)
             XCTAssertEqual(outline.frame, surface.bounds)
             XCTAssertNil(outline.hitTest(NSPoint(x: 2, y: 20)))
-            let stroke = try XCTUnwrap(outline.layer?.sublayers?.compactMap { $0 as? CAShapeLayer }.first)
+            let stroke = try XCTUnwrap(outline.layer?.sublayers?.first?.sublayers?.compactMap { $0 as? CAShapeLayer }
+                .first { $0.name == "pin-hover-outline-stroke" })
             XCTAssertEqual(stroke.shadowOpacity, 0)
             XCTAssertNotNil(stroke.lineDashPattern)
             XCTAssertNotNil(stroke.path)
@@ -600,6 +607,243 @@ final class PinPanelTests: XCTestCase {
         let host = panel.childWindows?.first?.contentView ?? surface
         let stack = try XCTUnwrap(host.subviews.compactMap { $0 as? NSStackView }.first)
         return stack.arrangedSubviews.compactMap { $0 as? NSButton }
+    }
+
+    func testTransparentToolbarUsesUniformRoundedDarkFill() throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        surface.setHovered(true)
+        let overlay = try XCTUnwrap(panel.childWindows?.first)
+        let host = try XCTUnwrap(overlay.contentView)
+        host.layoutSubtreeIfNeeded()
+        let backdrop = try XCTUnwrap(host.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
+        backdrop.layoutSubtreeIfNeeded()
+        XCTAssertFalse(overlay.hasShadow)
+        XCTAssertEqual(overlay.frame.width, 116)
+        XCTAssertEqual(backdrop.layer?.cornerRadius, 10)
+        XCTAssertFalse(backdrop.layer?.sublayers?.contains { $0 is CAGradientLayer } ?? false)
+        let rendered = try renderHoverArtwork(backdrop)
+        for x in [20, 58, 95] {
+            XCTAssertEqual(rendered.colorAt(x: x, y: 20)?.alphaComponent ?? 0, 0.5, accuracy: 1 / 255)
+        }
+        XCTAssertLessThan(rendered.colorAt(x: 0, y: 0)?.alphaComponent ?? 1, 0.01)
+        try exportHoverArtwork(try renderHoverArtwork(host), name: "pin-transparent-toolbar")
+        try exportHoverArtwork(try renderHoverArtwork(host, background: .white), name: "pin-transparent-toolbar-white")
+        try exportHoverArtwork(try renderHoverArtwork(host, background: NSColor(white: 0.08, alpha: 1)), name: "pin-transparent-toolbar-dark")
+        let opaqueImage = NSImage(size: NSSize(width: 200, height: 120), flipped: false) { rect in
+            NSColor.white.setFill()
+            rect.fill()
+            return true
+        }
+        let opaque = PinPanel(content: .image(opaqueImage), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { opaque.close() }
+        let opaqueSurface = try XCTUnwrap(opaque.contentView as? PinSurface)
+        opaqueSurface.hoverAnimationDuration = 0
+        opaqueSurface.setHovered(true)
+        opaqueSurface.layoutSubtreeIfNeeded()
+        let opaqueBackdrop = try XCTUnwrap(opaqueSurface.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
+        XCTAssertFalse(opaqueBackdrop.layer?.sublayers?.contains { $0 is CAGradientLayer } ?? false)
+        XCTAssertEqual(opaqueBackdrop.bounds.size, NSSize(width: 116, height: 40))
+        XCTAssertEqual(try renderHoverArtwork(opaqueBackdrop).colorAt(x: 58, y: 20)?.alphaComponent ?? 0, 0.5, accuracy: 1 / 255)
+        XCTAssertTrue(opaque.hasShadow)
+        try exportHoverArtwork(try renderHoverArtwork(opaqueSurface, background: .white), name: "pin-opaque-toolbar-white")
+        let text = PinPanel(content: .text("Internal backdrop"), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { text.close() }
+        let internalBackdrop = try XCTUnwrap(text.contentView?.subviews.first { $0.identifier?.rawValue == "pin-controls-backdrop" })
+        XCTAssertTrue(internalBackdrop.layer?.sublayers?.contains { $0 is CAGradientLayer } == true)
+    }
+
+    func testOpaqueFitOutlineUpdatesForModeResizeAndHover() throws {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 320, pixelsHigh: 80,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.bitmapData?.initialize(repeating: 255, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+        let image = NSImage(size: NSSize(width: 320, height: 80))
+        image.addRepresentation(bitmap)
+        let panel = PinPanel(content: .image(image), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        let outline = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-hover-outline" })
+        panel.setFrame(NSRect(x: 100, y: 100, width: 200, height: 200), display: true)
+        surface.layoutSubtreeIfNeeded()
+        surface.setHovered(true)
+        XCTAssertTrue(outline.isHidden, "Opaque cover has no transparent window margins")
+        panel.setImageScaling(.fit, animated: false)
+        XCTAssertFalse(outline.isHidden)
+        XCTAssertEqual(outline.layer?.opacity, 1)
+        XCTAssertTrue(panel.hasShadow)
+        XCTAssertTrue(panel.childWindows?.isEmpty ?? true)
+        panel.setImageScaling(.cover, animated: false)
+        XCTAssertTrue(outline.isHidden)
+        panel.setImageScaling(.fit, animated: false)
+        XCTAssertFalse(outline.isHidden)
+        panel.setFrame(NSRect(x: 100, y: 100, width: 400, height: 100), display: true)
+        surface.layoutSubtreeIfNeeded()
+        XCTAssertTrue(outline.isHidden, "Fit matching the image aspect ratio has no letterbox")
+        panel.setFrame(NSRect(x: 100, y: 100, width: 200, height: 200), display: true)
+        surface.layoutSubtreeIfNeeded()
+        XCTAssertFalse(outline.isHidden, "Resizing restores bounds when fit leaves transparent margins")
+        surface.setHovered(false)
+        XCTAssertTrue(outline.isHidden)
+        panel.setImageScaling(.cover, animated: false)
+        panel.setImageScaling(.fit, animated: false)
+        XCTAssertTrue(outline.isHidden, "Changing mode while not hovered keeps the outline hidden")
+        surface.setHovered(true)
+        XCTAssertFalse(outline.isHidden)
+    }
+
+    func testHoverOutlineContrastsOnWhiteAndDarkWithinResizePerimeter() throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        surface.setHovered(true)
+        surface.layoutSubtreeIfNeeded()
+        let outline = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-hover-outline" })
+        outline.layoutSubtreeIfNeeded()
+        let clear = try renderHoverArtwork(outline)
+        for y in 7..<(clear.pixelsHigh - 7) {
+            for x in 7..<(clear.pixelsWide - 7) {
+                XCTAssertEqual(clear.colorAt(x: x, y: y)?.alphaComponent, 0)
+            }
+        }
+        let white = try renderHoverArtwork(outline, background: .white)
+        let dark = try renderHoverArtwork(outline, background: NSColor(white: 0.08, alpha: 1))
+        let topWhite = (0..<7).flatMap { y in (12..<(white.pixelsWide - 12)).compactMap { white.colorAt(x: $0, y: y)?.redComponent } }
+        let topDark = (0..<7).flatMap { y in (12..<(dark.pixelsWide - 12)).compactMap { dark.colorAt(x: $0, y: y)?.redComponent } }
+        XCTAssertLessThan(try XCTUnwrap(topWhite.min()), 0.8)
+        XCTAssertGreaterThan(try XCTUnwrap(topDark.max()), 0.8)
+        XCTAssertEqual(white.colorAt(x: 100, y: 50)?.redComponent ?? 0, 1, accuracy: 0.01)
+        XCTAssertEqual(dark.colorAt(x: 100, y: 50)?.redComponent ?? 0, 0.08, accuracy: 0.01)
+        try exportHoverArtwork(white, name: "pin-hover-outline-white")
+        try exportHoverArtwork(dark, name: "pin-hover-outline-dark")
+        try exportHoverArtwork(clear, name: "pin-hover-outline-transparent")
+    }
+
+    func testOutlineAnimationTransformKeepsEveryEdgeVisibleAtAllSizes() throws {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { throw XCTSkip("Motion is disabled") }
+        for size in [NSSize(width: 120, height: 80), NSSize(width: 800, height: 500)] {
+            let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+            defer { panel.close() }
+            panel.setFrame(NSRect(origin: NSPoint(x: 100, y: 100), size: size), display: true)
+            let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+            surface.hoverAnimationDuration = 10
+            surface.layoutSubtreeIfNeeded()
+            surface.setHovered(true)
+            let outline = try XCTUnwrap(surface.subviews.first { $0.identifier?.rawValue == "pin-hover-outline" })
+            outline.layoutSubtreeIfNeeded()
+            let content = try XCTUnwrap(outline.layer?.sublayers?.first { $0.name == "pin-hover-outline-content" })
+            let animation = try XCTUnwrap(content.animation(forKey: "pin-hover-zoom") as? CABasicAnimation)
+            let from = try XCTUnwrap(animation.fromValue as? NSValue).caTransform3DValue
+            let to = try XCTUnwrap(animation.toValue as? NSValue).caTransform3DValue
+            XCTAssertEqual(content.anchorPoint, .zero)
+            XCTAssertLessThanOrEqual(from.m41, 2.001)
+            XCTAssertLessThanOrEqual(from.m42, 2.001)
+            XCTAssertEqual(from.m41, size.width * (1 - from.m11) / 2, accuracy: 0.001)
+            XCTAssertEqual(from.m42, size.height * (1 - from.m22) / 2, accuracy: 0.001)
+            outline.layer?.removeAnimation(forKey: "pin-hover")
+            content.removeAnimation(forKey: "pin-hover-zoom")
+            for (name, fraction) in [("from", CGFloat(0)), ("middle", CGFloat(0.5)), ("final", CGFloat(1))] {
+                var frame = CATransform3DIdentity
+                frame.m11 = from.m11 + (to.m11 - from.m11) * fraction
+                frame.m22 = from.m22 + (to.m22 - from.m22) * fraction
+                frame.m41 = from.m41 + (to.m41 - from.m41) * fraction
+                frame.m42 = from.m42 + (to.m42 - from.m42) * fraction
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                content.transform = frame
+                // Normalized opacity isolates the real animation transform's clipping at fade-in start.
+                outline.layer?.opacity = 1
+                CATransaction.commit()
+                let rendered = try renderHoverArtwork(outline)
+                let width = rendered.pixelsWide
+                let height = rendered.pixelsHigh
+                var edgeMaximum = [CGFloat](repeating: 0, count: 4)
+                var interiorMaximum: CGFloat = 0
+                for y in 0..<height {
+                    for x in 0..<width {
+                        let alpha = rendered.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                        if x < 7 { edgeMaximum[0] = max(edgeMaximum[0], alpha) }
+                        if x >= width - 7 { edgeMaximum[1] = max(edgeMaximum[1], alpha) }
+                        if y < 7 { edgeMaximum[2] = max(edgeMaximum[2], alpha) }
+                        if y >= height - 7 { edgeMaximum[3] = max(edgeMaximum[3], alpha) }
+                        if x >= 7, x < width - 7, y >= 7, y < height - 7 { interiorMaximum = max(interiorMaximum, alpha) }
+                    }
+                }
+                for maximum in edgeMaximum { XCTAssertGreaterThan(maximum, 0.4, name + " must retain all four edges") }
+                XCTAssertEqual(interiorMaximum, 0)
+                try exportHoverArtwork(rendered, name: "pin-hover-outline-\(Int(size.width))-\(name)")
+            }
+        }
+    }
+
+    func testTransparentEdgeEntryMoveAndCursorEventsApplyDirectionalCursor() throws {
+        let panel = PinPanel(content: .image(try transparentImage()), screen: try XCTUnwrap(NSScreen.main), offset: 0)
+        defer { panel.close() }
+        panel.setFrame(NSRect(x: 100, y: 100, width: 300, height: 200), display: true)
+        let surface = try XCTUnwrap(panel.contentView as? PinSurface)
+        surface.hoverAnimationDuration = 0
+        surface.updateTrackingAreas()
+        let always = surface.trackingAreas.filter { $0.options.contains(.activeAlways) }
+        XCTAssertTrue(always.contains { $0.options.contains(.mouseEnteredAndExited) && $0.options.contains(.mouseMoved) })
+        XCTAssertTrue(always.allSatisfy { !$0.options.contains(.cursorUpdate) })
+        XCTAssertTrue(surface.trackingAreas.contains { $0.options.contains(.activeInActiveApp) && $0.options.contains(.cursorUpdate) })
+        XCTAssertFalse(panel.canBecomeKey)
+        let points = [NSPoint(x: 3, y: 100), NSPoint(x: 297, y: 100), NSPoint(x: 150, y: 3), NSPoint(x: 150, y: 197),
+                      NSPoint(x: 3, y: 3), NSPoint(x: 297, y: 197), NSPoint(x: 3, y: 197), NSPoint(x: 297, y: 3)]
+        for point in points {
+            let location = surface.convert(point, to: nil)
+            let enter = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: location, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+            NSCursor.arrow.set()
+            surface.mouseEntered(with: enter)
+            XCTAssertTrue(NSCursor.current === surface.resizeCursor(at: point))
+            let moved = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: location, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0))
+            NSCursor.arrow.set()
+            surface.mouseMoved(with: moved)
+            XCTAssertTrue(NSCursor.current === surface.resizeCursor(at: point))
+            let update = try XCTUnwrap(NSEvent.enterExitEvent(with: .cursorUpdate, location: location, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil))
+            NSCursor.arrow.set()
+            surface.cursorUpdate(with: update)
+            XCTAssertTrue(NSCursor.current === surface.resizeCursor(at: point))
+        }
+        let host = try XCTUnwrap(panel.childWindows?.first?.contentView)
+        NSCursor.resizeLeftRight.set()
+        host.mouseEntered(with: NSEvent())
+        XCTAssertTrue(NSCursor.current === NSCursor.arrow)
+        NSCursor.resizeUpDown.set()
+        host.mouseMoved(with: NSEvent())
+        XCTAssertTrue(NSCursor.current === NSCursor.arrow)
+        NSCursor.resizeLeftRight.set()
+        surface.mouseExited(with: NSEvent())
+        XCTAssertTrue(NSCursor.current === NSCursor.arrow)
+    }
+
+    private func renderHoverArtwork(_ view: NSView, background: NSColor? = nil) throws -> NSBitmapImageRep {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(view.bounds.width),
+            pixelsHigh: Int(view.bounds.height), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        if let background {
+            context.cgContext.setFillColor(background.cgColor)
+            context.cgContext.fill(view.bounds)
+        }
+        view.layoutSubtreeIfNeeded()
+        view.displayIfNeeded()
+        view.layer?.render(in: context.cgContext)
+        return bitmap
+    }
+
+    private func exportHoverArtwork(_ bitmap: NSBitmapImageRep, name: String) throws {
+        guard let path = ProcessInfo.processInfo.environment["PIR_ARTWORK_SNAPSHOT_DIR"], !path.isEmpty else { return }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: directory.appendingPathComponent(name + ".png"))
     }
 
     func testLargeTextRepeatedResizeUsesTextKitTwoViewport() throws {
