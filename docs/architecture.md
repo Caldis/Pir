@@ -18,6 +18,8 @@
 | PirCore | 内容分类、尺寸约束与快捷键等可独立测试的策略 |
 | 官网 | 静态产品页、shader 视觉与 GitHub Release 下载 |
 
+MenuBarIcon 通过 Bundle 资源名加载状态栏图标, 18 px 与 36 px representation 共用 18 × 18 pt 逻辑尺寸, AppKit 按目标屏幕倍率选图并执行 template 着色
+
 ## 设计决策
 
 原生 AppKit 提供菜单栏、非激活面板与动态系统颜色, SwiftPM 提供轻量构建和核心行为测试. 系统注册的快捷键直接驱动单次剪贴板读取, 应用空闲时保持事件驱动
