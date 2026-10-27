@@ -85,12 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = nil
         guard !hidden else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        let image = Bundle.main.url(forResource: "MenuBarTemplate", withExtension: "png")
-            .flatMap(NSImage.init(contentsOf:))
-            ?? NSImage(systemSymbolName: "p.circle", accessibilityDescription: "Pir")
-        image?.size = NSSize(width: 18, height: 18)
-        image?.isTemplate = true
-        item.button?.image = image
+        item.button?.image = MenuBarIcon.image()
         item.button?.toolTip = "Pir"
         item.button?.setAccessibilityLabel("Pir")
         let menu = NSMenu()

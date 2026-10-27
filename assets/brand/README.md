@@ -11,7 +11,7 @@
 | `MenuBarTemplate.png` | 18px 单色透明菜单栏图标 |
 | `MenuBarTemplate@2x.png` | 36px Retina 菜单栏图标 |
 
-菜单栏图标作为 template 使用, 显示尺寸为 18 × 18 pt, AppKit 按系统外观着色
+菜单栏图标通过 Bundle 资源名加载 1x 与 2x representation, 显示尺寸为 18 × 18 pt, AppKit 按屏幕倍率选图并采用 template 系统外观着色
 
 修改菜单栏矢量母版后, 在项目根执行 `swift scripts/render-menu-icon.swift` 更新 1x 与 2x 位图
 
