@@ -7,6 +7,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.10</title>
+      <sparkle:version>20261028.2</sparkle:version>
+      <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Wed, 28 Oct 2026 06:35:58 +0000</pubDate>
+      <description>&lt;h2&gt;改进&lt;/h2&gt;
+&lt;p&gt;新建文本贴屏时自动去除首尾空白与空行，保留正文内部排版，不修改系统剪贴板。已有贴图的编辑内容、会话恢复和再次贴上保持原样。&lt;/p&gt;
+&lt;h2&gt;Improvements&lt;/h2&gt;
+&lt;p&gt;New text pins trim leading and trailing whitespace and blank lines while preserving internal formatting and the original clipboard. Edited, restored and re-pinned content stays unchanged.&lt;/p&gt;
+</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.10/Pir.Versions.0.1.10-20261028.2.zip" length="6737689" type="application/octet-stream" sparkle:edSignature="y4YG66usWS8xgwxLK+vA8QsNJnUcsaFsdZJKCYs7oSybqVT+7tenWfzXY6cOAAJHGVYR42NSDPaZQhn58NQ+CA=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.9</title>
       <sparkle:version>20261028.1</sparkle:version>
       <sparkle:shortVersionString>0.1.9</sparkle:shortVersionString>
@@ -140,6 +153,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: N0daGtlDhMTjmMIWkQ9B2ybLczGfMeD0kgMSYT8YZ6mDZslq6VWQYGuDimoc//Uh1QkJiydJDNqklNgCZc9rDw==
-length: 10475
+edSignature: Us4rMDYyJgHYywAuNDqu/wxB4LTrupL2gJmCXOAwNAvXdpEBnM/ocg/TY01WUKY+06qOrJKWZR/gpBtJl0NIAA==
+length: 11573
 -->
