@@ -201,3 +201,23 @@ Limited Review: 桌面工具截图覆盖应用窗口, 系统菜单栏的整体�
 签名证书、私钥和 P12 的实时位置为 SSH 主机 macmini 的 /Users/caldis/Docs/ci-signing/keys/. 本轮临时钥匙串签名使用原有文件, 结束后恢复钥匙串搜索列表并清理临时材料.
 
 发行证据、独立公开下载、日志与测试会话归档位于 ~/.config/pir/migration/release-verification/0.1.8/. 已安装正式版恢复常规运行, 用户偏好与原有凭据保留
+
+## 0.1.9 发行验收
+
+2026-10-28 完成正式发行, 显示版本 0.1.9, 构建编号 20261028.1. 发布 tag 指向 cfde7f1, 功能与本地签名流程提交为 e4db2ba. 应用行为保持 0.1.8, README 补充更新页说明; 发布流程改为本地 Developer ID, 密钥位置与排查顺序写入 AGENTS.md.
+
+| 范围 | 结果 |
+| --- | --- |
+| 本地环境 | Mac mini 的 `~/Code/Pir`; Xcode 26.6, Swift 6.3.3, SDK 26.5; `scripts/dev.sh` 编译、启动与偏好页版本回读通过 |
+| 检查与构建 | 128 项 Swift 测试、6 项 Python 发布工具测试、本地化、网站与 shell 检查通过; arm64 / x86_64 Universal, 最低 macOS 13 |
+| 本地签名 | 使用 `~/Docs/ci-signing/keys/` 的既有证书与配对私钥, Developer ID Application: BIAO CHEN, Team N7Z52F27XK; 临时钥匙串签名后恢复搜索列表并清理 |
+| 应用公证 | Apple Accepted, 提交 61b98976-2eb4-4338-8898-f4f6be518383; stapler 与 Gatekeeper 通过 |
+| DMG 公证 | Developer ID 签名, Apple Accepted, 提交 aa8d3424-0d94-4191-ae3c-2e0bf6f270cc; 票据与镜像校验通过 |
+| 更新签名 | MacBook 原有 me.caldis.pir 密钥签名; 公钥与应用一致, 私钥保留原处; 本机使用 OpenSSL 独立验证 ZIP 与 appcast 的 Ed25519 签名通过 |
+| 公开发行 | [Pir 0.1.9](https://github.com/Caldis/Pir/releases/tag/0.1.9), DMG / ZIP / SHA256SUMS 已发布, update-feed 已更新; 公开下载 SHA256 一致, feed 与仓库逐字节一致 |
+| 公开 DMG | 下载后只读挂载, 内含应用严格验签、票据与 Gatekeeper 通过, 镜像已卸载 |
+| 实际更新 | 本机隔离目录中的 0.1.8 / 20261027.1 发现、下载、安装并自动重启至 0.1.9 / 20261028.1; 再次检查显示当前为最新版本 |
+| 安装回读 | 升级后应用的 118 个常规文件与签名更新 ZIP 一致; 严格验签、票据与 Gatekeeper 通过 |
+| CI | 实施提交 [40624979001](https://github.com/Caldis/Pir/actions/runs/40624979001) 成功 |
+
+本机产物与公开回读位于 `dist/`, 完整检查日志为 `/tmp/pir-final-check.log`, 发布日志为 `/tmp/pir-local-release.log`. 原 MacBook 工作区未修改; 本轮更新资产在独立临时目录生成, Aqua 签名任务结束后移除. 本轮人工交互覆盖偏好页、版本读取与真实更新; 图片、文本、文件及会话恢复由现有测试覆盖, 未逐项重新进行手势验收.
