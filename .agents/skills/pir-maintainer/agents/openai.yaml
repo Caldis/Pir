@@ -1,4 +1,4 @@
 interface:
   display_name: "Pir Maintainer"
-  short_description: "Hourly Pir issue fixes, PRs and verified signed releases"
+  short_description: "Scheduled Pir issue fixes, PRs and verified signed releases"
   default_prompt: "Use $pir-maintainer to start scheduled maintenance for Caldis/Pir in this chat, resume unfinished work, and complete verified releases."
