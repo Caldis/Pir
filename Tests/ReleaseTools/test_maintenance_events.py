@@ -107,6 +107,34 @@ class EventTests(EventTestCase):
         with self.assertRaises(ValueError): self.m.load_config(conf)
 
 
+    def test_signed_app_ping_without_repository_is_ignored(self):
+        payload = {'zen': 'Keep it logically awesome.', 'hook': {'id': 123}}
+        self.assertEqual(self.receive(payload, event='ping', signature='sha256=bad'), (401, 'invalid_signature'))
+        self.assertEqual(self.receive(payload, event='ping'), (202, 'ignored'))
+        self.assertEqual(self.queue.status(), {'pending': 0, 'batches': []})
+
+    def test_config_secret_and_database_symlinks_are_rejected(self):
+        secret = self.root / 'secret'
+        secret.write_text('a' * 64)
+        secret.chmod(0o600)
+        database = self.root / 'queue.sqlite3'
+        database.touch(mode=0o600)
+        config = self.root / 'config.json'
+        data = {'secret_file': str(secret), 'database': str(database),
+                'state_path': str(self.root / 'state.json'), 'thread_id': 'existing', 'cwd': str(ROOT)}
+        config.write_text(json.dumps(data))
+        config.chmod(0o600)
+        self.root.chmod(0o700)
+        alias = self.root / 'alias-config.json'
+        alias.symlink_to(config)
+        with self.assertRaises(ValueError): self.m.load_config(alias)
+        for key, target in [('secret_file', secret), ('database', database)]:
+            alias = self.root / ('alias-' + key)
+            alias.symlink_to(target)
+            changed = dict(data, **{key: str(alias)})
+            config.write_text(json.dumps(changed))
+            with self.assertRaises(ValueError): self.m.load_config(config)
+
     def test_http_handler_strict_path_framing_and_storage_failure(self):
         config = {'secret': b'secret', 'port': 18783, 'state_path': str(self.root / 'state.json')}
         with patch.object(self.m, 'BoundedHTTPServer') as server:

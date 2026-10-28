@@ -26,13 +26,14 @@ DEFAULT_CONFIG = Path.home() / '.config/pir/maintenance/events/config.json'
 
 
 def private(path, directory=False):
-    path = Path(path).expanduser().resolve()
-    mode = path.stat().st_mode
+    path = Path(path).expanduser().absolute()
+    info = path.lstat()
+    mode = info.st_mode
     if not (stat.S_ISDIR(mode) if directory else stat.S_ISREG(mode)) or mode & 0o077:
         raise ValueError('Private file/directory permissions required')
-    if path.stat().st_uid != os.getuid():
+    if info.st_uid != os.getuid():
         raise ValueError('Private file/directory owner mismatch')
-    return path
+    return path.resolve()
 
 
 def load_config(path):
@@ -53,12 +54,12 @@ def load_config(path):
     if not isinstance(config.get('thread_id'), str) or not config['thread_id']:
         raise ValueError('Existing thread ID required')
     for key in ('database', 'state_path', 'secret_file'):
-        target = Path(config[key]).expanduser().resolve()
+        target = Path(config[key]).expanduser().absolute()
         if target.is_relative_to(ROOT):
             raise ValueError('Private paths must be outside the repository')
         private(target.parent, True)
-        if target.exists(): private(target)
-        config[key] = str(target)
+        if target.exists() or target.is_symlink(): private(target)
+        config[key] = str(target.resolve())
     secret = private(config['secret_file']).read_bytes().strip()
     if len(secret) < 32: raise ValueError('Webhook secret must contain at least 32 bytes')
     config['secret'] = secret
@@ -167,6 +168,7 @@ def intake(store, secret, event, delivery, signature, body, state, now=None):
         if str(uuid.UUID(delivery)) != delivery.lower(): return 400, 'invalid_delivery'
         data = json.loads(body)
         if not isinstance(data, dict): return 400, 'invalid_payload'
+        if event == 'ping': return 202, 'ignored'
         if data.get('repository', {}).get('full_name') != REPOSITORY: return 403, 'repository_mismatch'
         if data.get('installation', {}).get('id') != INSTALLATION: return 403, 'installation_mismatch'
         sender = data.get('sender', {})
