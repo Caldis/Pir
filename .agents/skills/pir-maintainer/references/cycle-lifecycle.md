@@ -6,7 +6,7 @@ The scheduler decides when to wake this chat. Do not put cadence expectations, s
 
 1. Read required repository instructions, then `cycle.py status` (compact by default) and `scan`. Use `status --full` only to investigate a specific missing detail. Save large logs under `dist/maintenance/<run-id>/`; return factual summaries and paths instead of full build logs or old notification bodies.
 2. Acquire the lease. An active lease means skip quietly; an expired lease still needs process/PR/release reconciliation before recovery. Run `notify.py retry` once. Do not re-register schedules.
-3. Resume prior work first. Persist `--worktree`, `--branch`, `--next-action` and `--external-job` on the issue checkpoint as those facts become known. A job ID includes its service/type; resuming always reads the actual external result first.
+3. Resume prior work first. Persist `--worktree`, `--branch`, `--next-action` and `--external-job` on the issue or local task checkpoint as those facts become known. Pending tasks are listed separately in `scan` and `status`; they never become synthetic GitHub issue requests. A job ID includes its service/type; resuming always reads the actual external result first.
 4. For substantive isolated work, explicitly spawn a fresh bounded worker with current acceptance criteria, safe workspace and evidence paths. Give it no external-write or lease ownership. The coordinator serializes merge, signing and release; signing search-list changes are shared macOS user state even across worktrees. A worker's success summary requires actual diff/test/evidence review before advancing.
 5. Worker handoff: issue/task ID; worktree/branch/head SHA; reproduction; files changed; commands/results and evidence paths; app interaction actually observed; remaining limits; exact next action. Do not copy raw transcripts or credentials. Reviewers are independent and read-only. Do not spawn workers for idle scans.
 
@@ -30,10 +30,21 @@ python3 scripts/maintenance/cycle.py finish --run-id "$PIR_RUN_ID" \
 
 Outcomes: `idle` (no unfinished checkpoints and no work), `completed` (selected work finished for this activation), `waiting` (external job/unchanged prerequisite), `blocked` (new actionable prerequisite failure), `failed` (unexpected failure). These describe the activation, not proof that the issue/release is verified. Always pass an explicit outcome. Backward-compatible omitted outcome is `completed`.
 
-`finish` atomically writes a private `runs/<run-id>.json` before releasing the lease and records `lastRun` with `finishedAt`, outcome, next action and evidence. An invalid result or journal I/O failure retains ownership. Repeating finish after an unknown local result returns the recorded result if no new lease intervened. Default status includes pending checkpoints, last-run result and notification counts, not old message bodies or verified history. Full state and run journals remain available for incident analysis.
+`finish` atomically writes a private `runs/<run-id>.json` before releasing the lease and records `lastRun` with `finishedAt`, outcome, next action and evidence. An invalid result or journal I/O failure retains ownership. Repeating finish after an unknown local result returns the recorded result if no new lease intervened. Default status includes pending issue/task checkpoints and their completion counts, last-run result and notification counts, not old message bodies or verified history. Full state and run journals remain available for incident analysis.
 
 ## Improvement evidence
 
-Choose a proactive task only when owner issue/release work cannot advance. Record the observed bottleneck, before measurement/reproduction, smallest proposed change and acceptance in a repository plan. Keep behavior and product scope; use a normal reviewed PR and app release only for application changes. A tooling-only improvement needs no empty app release. Use the task's plan/PR as durable identity; don't manufacture an issue or route task notifications through a fake issue number. Report meaningful proactive completion/new blockers in this chat; Telegram issue events continue to require a real issue. Prioritize supporting task notifications in a later bounded change only if this limitation is actually encountered.
+Choose a proactive task only when owner issue/release work cannot advance. Record the observed bottleneck, before measurement/reproduction, smallest proposed change and acceptance in a repository plan. Keep behavior and product scope; use a normal reviewed PR and app release only for application changes. A tooling-only improvement needs no empty app release. Before delegating, create a local checkpoint using a stable slug and repository plan; persist its branch/worktree/head and subsequent PR/CI facts with `--task` throughout the same lifecycle. A new task requires `--plan`; later checkpoints inherit it. Finished tasks require the same evidence and no-app-release reason as issue checkpoints. Never manufacture an issue or route task notifications through a fake issue number. Report meaningful proactive completion/new blockers in this chat; Telegram issue events continue to require a real issue. Prioritize supporting task notifications in a later bounded change only if this limitation is actually encountered.
 
 Fresh worktree preflight: ignored dependencies and build outputs are not copied. For this repo, install locked website dependencies with `npm ci --prefix website` if `website/node_modules` is absent before full `scripts/check.sh`. Never copy user configuration or credentials into a worker worktree. Keep the setup result in the worker handoff.
+
+Example local task (use real plan/evidence and current lease):
+
+```bash
+python3 scripts/maintenance/cycle.py checkpoint --run-id "$PIR_RUN_ID" \
+  --task "$PIR_TASK" --plan "$PIR_PLAN" --phase implementing \
+  --worktree "$PIR_WORKTREE" --branch "$PIR_BRANCH" \
+  --next-action "Collect worker commit and validate reproduction evidence"
+```
+
+Tasks have separate `resume`/`blocked` entries in `scan`, not remote issue fingerprints. Recheck a task blocker once per activation; read its real PR/head/CI before continuing. Verified tasks leave the pending list. `finish --outcome idle` rejects unfinished tasks as well as unfinished issues; use waiting/blocked when preserving a pending task. Owner issues and release recovery remain higher priority than starting another proactive task.
