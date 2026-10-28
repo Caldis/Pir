@@ -142,9 +142,14 @@ final class PinSessionIntegrationTests: XCTestCase {
         let panel = PinPanel(content: .text("Cancelled drag"), screen: screen, offset: 0)
         defer { panel.close() }
         var captured: [NSRect] = []
-        panel.onFrameChange = { captured.append($0) }
+        let completed = expectation(description: "Native move completed after button release")
+        completed.assertForOverFulfill = true
+        panel.onFrameChange = {
+            captured.append($0)
+            completed.fulfill()
+        }
         panel.windowWillMove(Notification(name: NSWindow.willMoveNotification, object: panel))
-        try await Task.sleep(for: .milliseconds(100))
+        await fulfillment(of: [completed], timeout: 3)
         XCTAssertEqual(captured, [panel.frame])
         panel.setFrame(panel.frame.offsetBy(dx: 20, dy: -20), display: true)
         panel.windowDidMove(Notification(name: NSWindow.didMoveNotification, object: panel))
