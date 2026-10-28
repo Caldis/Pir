@@ -1,19 +1,34 @@
-# GitHub user and automation identity
+# GitHub App maintenance identity
 
-GitHub supports a dedicated bot via a GitHub App. Requests authenticated with an **installation access token** are attributed to that App (`app-slug[bot]`). A personal/OAuth token or an App **user access token** acts as the authorizing user; it does not separate Codex from the owner. Changing Git author/co-author strings or signing a comment “Codex” does not change its API actor.
+Every Pir maintenance issue, pull request, repository and Project write must use the native installation bot `caldis-pir-maintainer[bot]`. The owner explicitly selected this identity. A machine user, personal/OAuth token, App user token, owner connector, or inherited `gh` login is never a fallback. Git author strings and comment signatures do not change the API actor.
 
-For Pir, prefer a private GitHub App installed only on Caldis/Pir for repository automation. Start with Issues and Pull requests read/write, Contents read/write only for pushes/releases, Actions/Checks read for CI; add other permissions only for a demonstrated endpoint need. No administration, bypass, secrets-management or unrelated-repository permissions by default. Installation tokens expire after one hour; refresh before writes rather than changing the actor. A local runner can mint tokens on demand; scheduled outbound maintenance needs no webhook/public server.
+## Local configuration and runner
 
-Project #7 is **user-owned**, not organization-owned. GitHub's Projects Actions guide recommends PATs for user projects and GitHub Apps for organization projects. Do not assume repository installation permissions grant access to this personal Project. Test read and mutation permissions against that exact Project with the intended identity. If personal Project access still needs an owner-authorized credential, keep explicit separate routing: bot for repository issue/PR writes, authorized Project credential for board writes. The Project timeline may still show the owner in that setup. Full identity separation across both surfaces requires a confirmed supported access route; moving the Project to an organization is a separate owner decision, not maintenance authority.
+The approved private App is `caldis-pir-maintainer` (5512939), installation 176235800, selected repository `Caldis/Pir`. Required permissions are Issues/Pull requests/Contents write and Actions/Checks/Metadata read. Do not add administration, secrets, bypass or unrelated repository access.
 
-A machine user is another personal account used for automation. It can segregate actions where the account is granted access, but needs its own login, credential lifecycle and Project collaboration permissions; it is not the App's built-in `[bot]` identity. Do not create another account or store passwords merely to label comments.
+Use `scripts/maintenance/github_app.example.json` as the schema for private `~/.config/pir/maintenance/github-app.json`. The configuration and PEM must be regular user-owned files with mode 0600; their containing directories must be user-owned mode 0700. Keep the PEM outside every repository. Never commit configuration, keys, JWTs or installation tokens. Do not print them, use command arguments for tokens, or change the owner's global `gh` authentication.
 
-The existing maintenance tools currently use `gh`'s active credential and `gh api user` for comment ownership/fingerprint filtering. **They are not a drop-in installation-token client**: an installation token may not support `/user`. Before switching, implement and test explicit actor resolution, per-surface credential routing, comment ownership and legacy actor migration. Preserve old marked comments/checkpoints; don't edit another actor's comments. Read prior automation comments by recorded actor + marker and link them to a new bot-owned status comment once if ownership changed. Unknown writes still require readback. Bot status is not independent human review and never bypasses current-head CI/review/release gates.
+```bash
+python3 scripts/maintenance/github_app.py check
+python3 scripts/maintenance/github_app.py run -- gh api repos/Caldis/Pir
+python3 scripts/maintenance/github_app.py run -- gh pr view 36 --repo Caldis/Pir
+python3 scripts/maintenance/github_app.py run -- git push origin HEAD
+```
 
-The owner has asked whether bot identity is supported; this does not itself request App registration or credential replacement. Prepare the App name/permission/installation plan before provisioning. Keep private key, app/installation credentials and generated tokens outside the repository and logs. After an explicit provisioning request, configure locally and verify a single authorized real operation and its actor; don't emit test spam to issues/Project.
+The runner validates App ID/slug, installation owner/repository selection, token repository scope, effective permissions and expiry. It signs a short-lived JWT through OpenSSL and mints an installation token only in memory. It refreshes before expiry and replaces inherited GitHub token variables. `check` prints nonsecret identity/permissions/expiry; there is no token export command. `cycle.py` and `projects.py` acquire this identity internally. All other maintenance `gh` and authenticated Git operations in these references must use the runner, including PR creation, review, merge, releases and CI reads. Lease `guard` and external-write authorization still apply immediately before mutation; the runner does not grant a lease or review approval.
+
+Installation tokens cannot rely on `GET /user`. The verified App identity resolves to `caldis-pir-maintainer[bot]`. Comment upserts only edit that actor's marked comments. Preserve legacy owner-authored marked comments and checkpoints; read them as prior evidence and create/reuse a bot-owned status comment when needed. Never edit another actor's comments. Re-read remote state after an unknown write outcome before retrying. Bot activity is not independent review and never bypasses current-head CI/release gates.
+
+## Personal Project #7 is blocked
+
+Project #7 is user-owned. A repository installation does not establish Project access. During bootstrap on 2026-10-28, the validated installation token returned `projectV2: null` with GraphQL `NOT_FOUND` for the exact Caldis Project #7; an owner-authenticated read confirmed the Project exists. No App Project draft mutation was attempted. This is an explicit source/capability blocker, never an empty board.
+
+Keep Project reads and writes on the same App identity. Do not route them to owner credentials, create a machine user, create repository tracking/stage issues, or move the Project to an organization. Migration or other changes require a separate owner decision. Until App read **and mutation** capability against the exact board are proven, checkpoint the stage locally with its task/plan/evidence and record pending Project synchronization; do not claim a remote draft exists or status was synchronized. The bootstrap stage may proceed under the owner's bounded assignment with this recorded blocker. After capability changes, reconcile existing local stages and Project drafts before creating anything, using an authorized substantive mutation and readback rather than test spam.
+
+Offline validation: `python3 -B -m unittest discover -s Tests/ReleaseTools`. Missing/insecure configuration, key or access, expired/invalid tokens and Project failures stop the relevant operation without consulting personal credentials. Report the fixed diagnostic and retry prerequisite; preserve checkpoints for recovery.
 
 Official sources:
 - [Installation authentication and attribution](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation)
-- [App vs OAuth and machine vs bot accounts](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/differences-between-github-apps-and-oauth-apps)
-- [User access token attribution](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-with-a-github-app-on-behalf-of-a-user)
+- [Generating a JWT](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-json-web-token-jwt-for-a-github-app)
+- [Generating installation tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app)
 - [Projects authentication guidance](https://docs.github.com/en/issues/planning-and-tracking-with-projects/automating-your-project/automating-projects-using-actions)

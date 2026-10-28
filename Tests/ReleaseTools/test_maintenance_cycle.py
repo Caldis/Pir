@@ -20,6 +20,11 @@ def module():
 class MaintenanceTests(unittest.TestCase):
     def setUp(self):
         self.m = module()
+        auth = patch.object(self.m, 'app_client')
+        self.auth = auth.start().return_value
+        self.addCleanup(auth.stop)
+        self.auth.environment.return_value = {'GH_TOKEN': 'offline-fixture'}
+        self.auth.actor.return_value = 'caldis-pir-maintainer[bot]'
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.store = self.m.Store(Path(self.directory.name))
@@ -362,3 +367,44 @@ class MaintenanceTests(unittest.TestCase):
             '--release', 'not-required', '--note', 'Tooling only')
         self.assertEqual(cli('status')['tasks'], {})
         cli('finish', '--run-id', second, '--outcome', 'completed')
+
+
+class AppIdentityIntegrationTests(unittest.TestCase):
+    def test_scan_resolves_bot_without_user_endpoint_and_preserves_legacy_comments(self):
+        m = module()
+        with tempfile.TemporaryDirectory() as directory:
+            store = m.Store(Path(directory))
+            endpoints = []
+            def api(endpoint, method='GET', data=None):
+                endpoints.append(endpoint)
+                if 'state=open' in endpoint:
+                    return [{'number': 1, 'title': 'Owner request', 'body': '', 'labels': [], 'state': 'open', 'html_url': 'https://github.com/Caldis/Pir/issues/1'}]
+                return []
+            with patch.object(m, 'app_client') as auth, patch.object(m, 'gh_api', side_effect=api):
+                auth.return_value.actor.return_value = 'caldis-pir-maintainer[bot]'
+                result = m.scan(store)
+            self.assertEqual(result['issues'][0]['number'], 1)
+            self.assertNotIn('user', endpoints)
+            legacy = [{'id': 3, 'user': {'login': 'Caldis'}, 'body': '<!-- pir-maintainer:1:triage -->\nOld'}]
+            issue = {'number': 1, 'title': 'Owner request', 'body': '', 'labels': []}
+            self.assertEqual(m.fingerprint(issue, legacy, 'caldis-pir-maintainer[bot]'), m.fingerprint(issue, legacy, 'Caldis'))
+            writes = []
+            def comments(endpoint, method='GET', data=None):
+                if method == 'GET': return legacy
+                writes.append((endpoint, method, data))
+                return {'id': 4}
+            m.upsert_comment(comments, 1, 'triage', 'Current bot status', 'caldis-pir-maintainer[bot]')
+            self.assertEqual(writes[0][1], 'POST')
+            self.assertEqual(legacy[0]['body'], '<!-- pir-maintainer:1:triage -->\nOld')
+
+    def test_repository_call_never_falls_back_and_does_not_echo_stderr(self):
+        m = module()
+        with patch.object(m, 'app_client') as auth, patch.object(m.subprocess, 'run') as run:
+            auth.return_value.environment.side_effect = m._auth.AuthError('GitHub App local credential is unavailable')
+            with self.assertRaises(m._auth.AuthError): m.gh_api('repos/Caldis/Pir')
+            run.assert_not_called()
+        with patch.object(m, 'app_client') as auth, patch.object(m.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, '', 'owner-secret')) as run:
+            auth.return_value.environment.return_value = {'GH_TOKEN': 'installation-fixture'}
+            with self.assertRaises(RuntimeError) as failure: m.gh_api('repos/Caldis/Pir')
+            self.assertNotIn('owner-secret', str(failure.exception))
+            self.assertEqual(run.call_args.kwargs['env'], {'GH_TOKEN': 'installation-fixture'})

@@ -9,6 +9,16 @@ import re
 import subprocess
 import sys
 
+# Load from this checkout without depending on the caller's working directory or PYTHONPATH.
+_auth_spec = importlib.util.spec_from_file_location('pir_github_app', Path(__file__).with_name('github_app.py'))
+_auth = importlib.util.module_from_spec(_auth_spec)
+_auth_spec.loader.exec_module(_auth)
+
+
+def app_client():
+    return _auth.client()
+
+
 OWNER = 'Caldis'
 NUMBER = 7
 REPO = 'Caldis/Pir'
@@ -97,7 +107,9 @@ def graphql(query, variables):
     try:
         result = subprocess.run(['gh', 'api', 'graphql', '--input', '-'],
                                 input=json.dumps(payload), text=True,
-                                capture_output=True, timeout=90)
+                                capture_output=True, timeout=90, env=app_client().environment())
+    except _auth.AuthError:
+        raise ScanError('GitHub App Project access unavailable; no owner credential fallback') from None
     except subprocess.TimeoutExpired:
         raise ScanError('GitHub Project read timed out after 90 seconds') from None
     except OSError:
@@ -109,7 +121,7 @@ def graphql(query, variables):
             failed = None
         if isinstance(failed, dict) and failed.get('errors'):
             raise ScanError('GitHub Project GraphQL read failed; check query and permissions; snapshot discarded')
-        raise ScanError('GitHub Project read failed; check gh authentication and read:project scope')
+        raise ScanError('GitHub App Project read failed; prove access to Caldis Project #7; no owner credential fallback')
     try:
         response = json.loads(result.stdout)
     except (ValueError, TypeError):

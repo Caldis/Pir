@@ -14,6 +14,16 @@ import tempfile
 import time
 import uuid
 
+# Load from this checkout without depending on the caller's working directory or PYTHONPATH.
+_auth_spec = importlib.util.spec_from_file_location('pir_github_app', Path(__file__).with_name('github_app.py'))
+_auth = importlib.util.module_from_spec(_auth_spec)
+_auth_spec.loader.exec_module(_auth)
+
+
+def app_client():
+    return _auth.client()
+
+
 REPO = 'Caldis/Pir'
 PHASES = ['triaged', 'implementing', 'pr_open', 'merged', 'prepared', 'published', 'verified', 'blocked']
 
@@ -171,7 +181,7 @@ def fingerprint(issue, comments, viewer):
     content = {'title': issue.get('title'), 'body': issue.get('body'),
                'labels': sorted(x['name'] for x in issue.get('labels', [])),
                'comments': [(c.get('user', {}).get('login'), c.get('body')) for c in comments
-                            if not (c.get('user', {}).get('login') == viewer and c.get('body', '').startswith(marker))]}
+                            if not (c.get('user', {}).get('login') in (viewer, 'Caldis') and c.get('body', '').startswith(marker))]}
     return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -190,8 +200,8 @@ def gh_api(endpoint, method='GET', data=None):
     if method == 'GET': command += ['--paginate', '--slurp']
     if data is not None: command += ['--input', '-']
     result = subprocess.run(command, input=json.dumps(data) if data is not None else None,
-                            text=True, capture_output=True, timeout=90)
-    if result.returncode: raise RuntimeError(result.stderr.strip())
+                            text=True, capture_output=True, timeout=90, env=app_client().environment())
+    if result.returncode: raise RuntimeError('GitHub App repository request failed; verify permissions and retry after readback')
     response = json.loads(result.stdout)
     if method == 'GET':
         if len(response) == 1 and isinstance(response[0], dict): return response[0]
@@ -224,7 +234,7 @@ def project_snapshot():
 
 def scan(store):
     state = store.read()
-    viewer = gh_api('user')['login']
+    viewer = app_client().actor()
     opened = gh_api(f'repos/{REPO}/issues?state=open&per_page=100')
     issues = {str(x['number']): x for x in opened if 'pull_request' not in x}
     # A merge may have auto-closed an issue before a crashed release completed.
@@ -329,7 +339,7 @@ def main():
         store.guard(args.run_id)
         if args.dry_run: result = {'dryRun': True, 'body': args.body_file.read_text()}
         else:
-            viewer = gh_api('user')['login']
+            viewer = app_client().actor()
             store.guard(args.run_id)
             def guarded_api(endpoint, method='GET', data=None):
                 if method == 'GET': return gh_api(endpoint)

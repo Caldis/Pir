@@ -1,0 +1,8 @@
+{
+  "app_id": 5512939,
+  "app_slug": "caldis-pir-maintainer",
+  "installation_id": 176235800,
+  "owner": "Caldis",
+  "repository": "Caldis/Pir",
+  "private_key_path": "/Users/YOUR_USER/.config/pir/maintenance/github-app/private-key.pem"
+}
