@@ -13,6 +13,10 @@ The owner has requested hourly issue scanning, fixes, issue replies, PR creation
 
 On an explicit request to **start hourly maintenance**, create or update **one heartbeat in the current Pir chat**, using the app's `automation_update` tool, every hour. First inspect existing `$CODEX_HOME/automations/*/automation.toml` for this repo/name; update an existing matching task rather than duplicating it. Do not attach to another chat, silently move another chat's automation, or create a cron/system scheduler. If no suitable automation tool exists, report that scheduling is unavailable; never claim the skill itself is a timer. Use [references/hourly-prompt.md](references/hourly-prompt.md) as the human-readable scheduler prompt. Run the first cycle immediately; scheduling is not a substitute for work.
 
+## Telegram milestones
+
+The owner authorized one-way Chinese notifications to the existing local Telegram private chat. Read [references/notifications.md](references/notifications.md) and use `scripts/maintenance/notify.py` for issue receipt, work start, meaningful progress/recovery, blockers, execution success and verified release completion. Notify only real transitions; idle/unchanged scans stay silent. Delivery records deduplicate across hourly runs independently of issue checkpoints. Run bounded pending-notification recovery once after acquiring the lease. Notification failure must not replay or block fixes, merge or release. Never expose credentials, change the recipient, create another bot, or add inbound polling/webhooks.
+
 ## One cycle
 
 1. **Recover before fixing.** `python3 scripts/maintenance/cycle.py status` and `scan` are read-only. Scan includes open issues and unfinished state even if an issue auto-closed on merge. Read each selected issue and **all comments**, related PRs, current main, tags/releases and CI. Reconcile prior checkpoints with GitHub reality. Resume an existing merged PR or partial release before making a duplicate fix.
