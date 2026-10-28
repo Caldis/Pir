@@ -25,7 +25,7 @@ class GitHubAppTests(unittest.TestCase):
         self.key.write_text('test fixture, never used for signing')
         self.key.chmod(0o600)
         self.config = self.directory / 'github-app.json'
-        self.value = dict(app_id=5512939, app_slug='caldis-pir-maintainer', installation_id=176235800,
+        self.value = dict(app_id=5512939, app_slug='pir-maintainer', installation_id=176235800,
                           owner='Caldis', repository='Caldis/Pir', private_key_path=str(self.key))
         self.save()
 
@@ -35,14 +35,15 @@ class GitHubAppTests(unittest.TestCase):
 
     def responses(self, expires=None):
         expires = expires or (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
-        return [{'id': 5512939, 'slug': 'caldis-pir-maintainer'},
+        return [{'id': 5512939, 'slug': 'pir-maintainer'},
                 {'id': 176235800, 'app_id': 5512939, 'account': {'login': 'Caldis'},
                  'repository_selection': 'selected', 'permissions': self.m.PERMISSIONS},
                 {'token': 'ghs_testsecret', 'expires_at': expires, 'permissions': self.m.PERMISSIONS},
-                {'total_count': 1, 'repositories': [{'full_name': 'Caldis/Pir'}]}]
+                {'total_count': 1, 'repositories': [{'full_name': 'Caldis/Pir'}]},
+                {'id': 349413745, 'login': 'pir-maintainer[bot]', 'type': 'Bot'}]
 
     def test_rejects_insecure_modes_symlink_and_wrong_identity(self):
-        for field, value in [('app_id', 1), ('repository', 'Caldis/Other'), ('installation_id', True)]:
+        for field, value in [('app_id', 1), ('app_slug', 'caldis-pir-maintainer'), ('repository', 'Caldis/Other'), ('installation_id', True)]:
             with self.subTest(field=field):
                 original = self.value[field]
                 self.value[field] = value
@@ -67,18 +68,38 @@ class GitHubAppTests(unittest.TestCase):
             self.assertEqual(env['GH_TOKEN'], 'ghs_testsecret')
             self.assertNotIn('GITHUB_TOKEN', env)
             self.assertNotIn('GH_ENTERPRISE_TOKEN', env)
-            self.assertEqual(client.actor(), 'caldis-pir-maintainer[bot]')
+            self.assertEqual(client.actor(), 'pir-maintainer[bot]')
+            self.assertEqual(client.summary()['botUserId'], 349413745)
             self.assertNotIn('/user', [call.args[0] for call in request.call_args_list])
             self.assertEqual(request.call_args_list[2].kwargs['data']['repositories'], ['Pir'])
 
+    def test_actor_uses_verified_immutable_id_even_when_login_does_not_follow_slug(self):
+        client = self.m.Client(self.config)
+        responses = self.responses()
+        responses[-1]['login'] = 'caldis-pir-maintainer[bot]'
+        with patch.object(client, '_jwt', return_value='private-jwt'), patch.object(client, '_request', side_effect=responses) as request:
+            self.assertEqual(client.actor(), 'caldis-pir-maintainer[bot]')
+            self.assertEqual(request.call_args_list[-1].args[0], '/user/349413745')
+
+    def test_wrong_bot_identity_or_type_fails_before_commands(self):
+        for field, value in [('id', 1), ('type', 'User'), ('login', ''), ('login', 42)]:
+            client = self.m.Client(self.config)
+            responses = self.responses()
+            responses[-1][field] = value
+            with self.subTest(field=field, value=value), patch.object(client, '_jwt', return_value='private-jwt'), patch.object(client, '_request', side_effect=responses):
+                with self.assertRaises(self.m.AuthError): client.actor()
+                self.assertIsNone(client._token)
+
     def test_expired_token_permissions_or_repository_mismatch_fail_without_fallback(self):
-        for mode in ('expired', 'permissions', 'repository', 'owner'):
+        for mode in ('expired', 'permissions', 'repository', 'owner', 'app_id', 'app_slug'):
             client = self.m.Client(self.config)
             responses = self.responses()
             if mode == 'expired': responses[2]['expires_at'] = '2000-01-01T00:00:00Z'
             if mode == 'permissions': responses[2]['permissions'] = {'issues': 'read'}
             if mode == 'repository': responses[3]['repositories'][0]['full_name'] = 'Caldis/Other'
             if mode == 'owner': responses[1]['account']['login'] = 'Other'
+            if mode == 'app_id': responses[0]['id'] = 1
+            if mode == 'app_slug': responses[0]['slug'] = 'caldis-pir-maintainer'
             with self.subTest(mode=mode), patch.object(client, '_jwt', return_value='private-jwt'), patch.object(client, '_request', side_effect=responses), patch.dict(os.environ, {'GH_TOKEN': 'owner-secret'}):
                 with self.assertRaises(self.m.AuthError): client.environment()
                 self.assertIsNone(client._token)

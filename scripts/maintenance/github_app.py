@@ -17,7 +17,8 @@ from urllib.parse import urlsplit
 import weakref
 
 APP_ID = 5512939
-APP_SLUG = 'caldis-pir-maintainer'
+APP_SLUG = 'pir-maintainer'
+BOT_USER_ID = 349413745
 INSTALLATION_ID = 176235800
 OWNER = 'Caldis'
 REPOSITORY = 'Caldis/Pir'
@@ -53,6 +54,7 @@ class Client:
     def __init__(self, config=DEFAULT_CONFIG):
         self._token = None
         self._expires = 0
+        self._actor = None
         self.config_path = Path(config).expanduser()
         private_path(self.config_path.parent, directory=True)
         private_path(self.config_path)
@@ -107,7 +109,7 @@ class Client:
             raise AuthError('GitHub App API request failed; verify installation access') from None
 
     def _refresh(self):
-        self._token, self._expires = None, 0
+        self._token, self._expires, self._actor = None, 0, None
         try:
             jwt = self._jwt()
             app = self._request('/app', jwt)
@@ -130,7 +132,11 @@ class Client:
             repositories = self._request('/installation/repositories?per_page=100', token)
             if repositories.get('total_count') != 1 or [r.get('full_name') for r in repositories.get('repositories', [])] != [REPOSITORY]:
                 raise AuthError('GitHub App token repository scope mismatch')
-            self._token, self._expires = token, expires
+            actor = self._request(f'/user/{BOT_USER_ID}', token)
+            if (actor.get('id') != BOT_USER_ID or actor.get('type') != 'Bot'
+                or not isinstance(actor.get('login'), str) or not actor['login'].endswith('[bot]')):
+                raise AuthError('GitHub App bot identity mismatch')
+            self._token, self._expires, self._actor = token, expires, actor['login']
         except AuthError:
             raise
         except (ValueError, KeyError, TypeError, AttributeError):
@@ -138,7 +144,7 @@ class Client:
 
     def actor(self):
         self.environment()
-        return APP_SLUG + '[bot]'
+        return self._actor
 
     def environment(self):
         if not self._token or self._expires <= time.time() + 300: self._refresh()
@@ -231,7 +237,7 @@ class Client:
     def summary(self):
         self.environment()
         return {'appId': APP_ID, 'appSlug': APP_SLUG, 'installationId': INSTALLATION_ID,
-                'actor': APP_SLUG + '[bot]', 'repository': REPOSITORY, 'permissions': PERMISSIONS,
+                'actor': self._actor, 'botUserId': BOT_USER_ID, 'repository': REPOSITORY, 'permissions': PERMISSIONS,
                 'expiresAt': datetime.fromtimestamp(self._expires, timezone.utc).isoformat()}
 
 
