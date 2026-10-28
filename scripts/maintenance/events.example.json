@@ -1,0 +1,14 @@
+{
+  "host": "127.0.0.1",
+  "port": 18783,
+  "secret_file": "/Users/OWNER/.config/pir/maintenance/events/webhook.secret",
+  "database": "/Users/OWNER/.config/pir/maintenance/events/events.sqlite3",
+  "state_path": "/Users/OWNER/.config/pir/maintenance/state.json",
+  "thread_id": "EXISTING_PIR_THREAD_ID",
+  "cwd": "/Users/OWNER/Code/Pir",
+  "control_socket": null,
+  "codex": "/absolute/path/to/codex",
+  "request_timeout": 30,
+  "turn_timeout": 7200,
+  "lease_grace": 20
+}
