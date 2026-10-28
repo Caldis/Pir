@@ -22,20 +22,45 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored, content)
     }
 
-    func testClipboardPreservesWhitespaceAndUnicode() throws {
+    func testClipboardTrimsOuterWhitespaceAndPreservesInternalLayoutAndUnicode() throws {
         let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
-        let original = "  title\n\tlet value = 1\n\n中文 😀\n"
+        let original = " \t\r\n\u{00A0}title\n\tlet value = 1  \n\n中文 😀\n\u{3000}"
         pasteboard.declareTypes([.string], owner: nil)
         XCTAssertTrue(pasteboard.setString(original, forType: .string))
         XCTAssertTrue(pasteboard.types?.contains(.string) == true)
         XCTAssertFalse(pasteboard.types?.contains(.png) == true)
         XCTAssertFalse(pasteboard.types?.contains(.tiff) == true)
         XCTAssertEqual(pasteboard.string(forType: .string), original)
+        let changeCount = pasteboard.changeCount
         guard case .text(let value) = try ClipboardReader.read(from: pasteboard) else {
             return XCTFail("Expected plain text")
         }
-        XCTAssertEqual(value, original)
+        XCTAssertEqual(value, "title\n\tlet value = 1  \n\n中文 😀")
+        XCTAssertEqual(pasteboard.string(forType: .string), original)
+        XCTAssertEqual(pasteboard.changeCount, changeCount)
+    }
+
+    func testWhitespaceOnlyClipboardDoesNotProduceTextPin() throws {
+        for type in [NSPasteboard.PasteboardType.string, .rtf] {
+            let pasteboard = isolatedPasteboard()
+            defer { pasteboard.releaseGlobally() }
+            let whitespace = " \t\r\n\u{00A0}\u{3000}"
+            pasteboard.declareTypes([type], owner: nil)
+            if type == .string {
+                pasteboard.setString(whitespace, forType: type)
+            } else {
+                let attributed = NSAttributedString(string: whitespace)
+                let rtf = try attributed.data(from: NSRange(location: 0, length: attributed.length),
+                    documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+                pasteboard.setData(rtf, forType: type)
+            }
+            let changeCount = pasteboard.changeCount
+            XCTAssertThrowsError(try ClipboardReader.read(from: pasteboard)) { error in
+                guard case ClipboardError.unsupported = error else { return XCTFail("Expected unsupported whitespace-only text") }
+            }
+            XCTAssertEqual(pasteboard.changeCount, changeCount)
+        }
     }
 
     func testClipboardPrefersImageOverText() throws {
@@ -132,7 +157,7 @@ final class CoreTests: XCTestCase {
         }
     }
 
-    func testRTFOnlyClipboardRetainsTextLayout() throws {
+    func testRTFOnlyClipboardTrimsOuterWhitespaceAndRetainsInternalLayout() throws {
         let pasteboard = isolatedPasteboard()
         defer { pasteboard.releaseGlobally() }
         let original = "  Heading\n\tIndented\n"
@@ -145,7 +170,8 @@ final class CoreTests: XCTestCase {
         guard case .text(let value) = try ClipboardReader.read(from: pasteboard) else {
             return XCTFail("Expected plain text from RTF")
         }
-        XCTAssertEqual(value, original)
+        XCTAssertEqual(value, "Heading\n\tIndented")
+        XCTAssertEqual(pasteboard.data(forType: .rtf), rtf)
     }
 
     func testHotKeyRequiresModifierExceptFunctionKeys() {

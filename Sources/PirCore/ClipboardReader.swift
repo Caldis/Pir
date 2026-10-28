@@ -60,11 +60,13 @@ public enum ClipboardReader {
         }
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
             guard text.utf8.count <= maximumTextBytes else { throw ClipboardError.tooLarge }
-            return .text(text)
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return .text(trimmed) }
         }
         if let data = pasteboard.data(forType: .rtf) {
             guard data.count <= maximumTextBytes else { throw ClipboardError.tooLarge }
-            if let text = NSAttributedString(rtf: data, documentAttributes: nil)?.string, !text.isEmpty {
+            if let text = NSAttributedString(rtf: data, documentAttributes: nil)?.string
+                .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
                 return .text(text)
             }
         }
