@@ -1,53 +1,6 @@
 import { createAmbientArtwork } from './artwork.js';
 const releasePage = 'https://github.com/Caldis/Pir/releases/latest';
-const artwork = createAmbientArtwork();
-
-for (const panel of document.querySelectorAll('[data-draggable]')) {
-  let offset = { x: 0, y: 0 };
-  let origin;
-  const rotation = 0;
-  const paintPosition = () => { panel.style.transform = `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`; };
-  panel.addEventListener('pointerdown', (event) => {
-    if (event.target.closest('button')) return;
-    const bounds = panel.getBoundingClientRect();
-    // Leave the native bottom-right resize affordance available.
-    if (event.clientX > bounds.right - 28 && event.clientY > bounds.bottom - 28) return;
-    origin = { x: event.clientX - offset.x, y: event.clientY - offset.y };
-    panel.setPointerCapture(event.pointerId);
-    panel.classList.add('is-dragging');
-  });
-  panel.addEventListener('pointermove', (event) => {
-    if (!origin) return;
-    const sceneBounds = panel.parentElement.getBoundingClientRect();
-    offset = { x: Math.max(-sceneBounds.width * .35, Math.min(sceneBounds.width * .35, event.clientX - origin.x)), y: Math.max(-150, Math.min(100, event.clientY - origin.y)) };
-    paintPosition();
-  });
-  const stop = () => { origin = null; panel.classList.remove('is-dragging'); };
-  panel.addEventListener('pointerup', stop);
-  panel.addEventListener('pointercancel', stop);
-  panel.addEventListener('lostpointercapture', stop);
-  panel.addEventListener('keydown', (event) => {
-    const directions = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
-    if (event.target !== panel || !directions[event.key]) return;
-    event.preventDefault();
-    const [x, y] = directions[event.key];
-    offset.x = Math.max(-150, Math.min(150, offset.x + x));
-    offset.y = Math.max(-150, Math.min(100, offset.y + y));
-    paintPosition();
-  });
-  panel.resetDemo = () => { offset = { x: 0, y: 0 }; panel.hidden = false; panel.style.width = ''; panel.style.height = ''; paintPosition(); };
-}
-for (const button of document.querySelectorAll('[data-close]')) {
-  button.addEventListener('click', () => {
-    document.querySelector(`.${button.dataset.close}`).hidden = true;
-    document.querySelector('#reset-demo').focus();
-    artwork.update();
-  });
-}
-document.querySelector('#reset-demo').addEventListener('click', () => {
-  document.querySelectorAll('[data-draggable]').forEach((panel) => panel.resetDemo());
-  artwork.update();
-});
+createAmbientArtwork();
 
 async function resolveDownload() {
   const controller = new AbortController();

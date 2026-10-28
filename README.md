@@ -19,17 +19,23 @@ Pir is a native macOS menu bar app that keeps clipboard images, editable text, a
 
 ### Images
 
+<img src="website/assets/usage-image.png" width="397" alt="Image pinned in Pir">
+
 - Pin images from your clipboard, including transparent images and Retina screenshots with their logical display size preserved.
 - Switch between filling the window with a crop and fitting the whole image. The window keeps its size and position; your display mode is saved and carried over when you pin it again.
 - Copy the original image from the floating window.
 
 ### Text
 
+<img src="website/assets/usage-text.png" width="387" alt="Editable text pinned in Pir">
+
 - Select, edit, and copy text directly in a pin. Edits are restored when Pir restarts.
 - Drag the space at the top to move the window, or hold `Option` while dragging the text. Resize from the edges; narrow windows wrap text and scroll vertically.
 - Text and background colors follow the macOS appearance. New pins trim leading and trailing whitespace without changing your clipboard or internal formatting.
 
 ### Files
+
+<img src="website/assets/usage-files.png" width="376" alt="Files pinned in Pir with native icons">
 
 - Copy files or folders in Finder, then pin them as references with native icons or a list view.
 - Select by dragging a selection rectangle, toggle items with `Command`, add to a selection with `Shift`, double-click to open, or drag files to Finder.
@@ -41,10 +47,11 @@ Pir is a native macOS menu bar app that keeps clipboard images, editable text, a
 
 Requires **macOS 13 or later**, on Apple Silicon or Intel Macs.
 
-1. [Download the latest disk image](https://github.com/Caldis/Pir/releases/latest) and drag Pir into Applications.
-2. Open Pir and complete the welcome screen. You can record a shortcut and try pinning the Pir logo there.
-3. Copy an image, text, or files, then press **`⇧⌘V`** (`Shift` + `Command` + `V`) to pin the content. A saved custom shortcut continues to work.
-4. Drag a pin to move it and use its edges to resize. Hover over it to reveal the controls in the upper-left corner.
+[Download the latest disk image](https://github.com/Caldis/Pir/releases/latest), drag Pir into Applications, then open it and complete the welcome screen. You can record a shortcut and try pinning the Pir logo there.
+
+1. **Copy.** Copy an image, some text, or files and folders in Finder.
+2. **Pin.** Press **`⇧⌘V`** (`Shift` + `Command` + `V`) in any app. A saved custom shortcut continues to work.
+3. **Arrange.** Drag a pin to move it and use its edges to resize. Hover over it to reveal the controls in the upper-left corner. For text, drag the space at the top or hold `Option` while dragging the text.
 
 | Pin | Controls, from left to right |
 | --- | --- |

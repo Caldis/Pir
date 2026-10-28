@@ -19,17 +19,23 @@ Pir 是原生 macOS 菜单栏应用, 将剪贴板图片、可编辑文本与文�
 
 ### 图片
 
+<img src="website/assets/usage-image.png" width="397" alt="Pir 图片贴屏">
+
 - 贴出剪贴板中的图片, 支持透明图片, Retina 截图保留逻辑显示尺寸.
 - 在裁剪填满窗口与完整等比显示之间切换. 窗口尺寸和位置保持不变; 显示模式会保存, 再次贴上也会沿用.
 - 从浮窗复制原始图片.
 
 ### 文本
 
+<img src="website/assets/usage-text.png" width="387" alt="Pir 中可编辑的文本贴屏">
+
 - 直接在浮窗中选择、编辑和复制文字, 修改随 Pir 重启恢复.
 - 拖动顶部留白移动窗口, 或按住 `Option` 拖动正文. 从边缘调整大小, 窄窗口保持换行并支持竖向滚动.
 - 文字与背景颜色跟随 macOS 明暗主题. 新建贴屏去除首尾空白, 保留内部排版, 不改写剪贴板.
 
 ### 文件
+
+<img src="website/assets/usage-files.png" width="376" alt="Pir 文件贴屏与原生图标">
 
 - 在 Finder 中复制文件或文件夹, 贴出带原生图标或列表视图的文件引用.
 - 支持相交框选、`Command` 切换选择、`Shift` 追加选择、双击打开, 以及拖到 Finder.
@@ -41,10 +47,11 @@ Pir 是原生 macOS 菜单栏应用, 将剪贴板图片、可编辑文本与文�
 
 需要 **macOS 13 或更新版本**, 支持 Apple Silicon 与 Intel Mac.
 
-1. [下载最新磁盘镜像](https://github.com/Caldis/Pir/releases/latest), 将 Pir 拖入 Applications.
-2. 打开 Pir 并完成欢迎页, 可以在其中录制快捷键并试贴 Pir Logo.
-3. 复制图片、文字或文件, 按 **`⇧⌘V`** (`Shift` + `Command` + `V`) 贴出内容. 已保存的自定义快捷键继续生效.
-4. 拖动浮窗调整位置, 从边缘调整大小, 悬停后显示左上角控件.
+[下载最新磁盘镜像](https://github.com/Caldis/Pir/releases/latest), 将 Pir 拖入 Applications, 然后打开并完成欢迎页. 可以在其中录制快捷键并试贴 Pir Logo.
+
+1. **复制.** 复制图片、文字, 或 Finder 中的文件与文件夹.
+2. **贴出.** 在任意应用中按 **`⇧⌘V`** (`Shift` + `Command` + `V`). 已保存的自定义快捷键继续生效.
+3. **摆放.** 拖动浮窗调整位置, 从边缘调整大小, 悬停后显示左上角控件. 文本浮窗可拖动顶部留白, 或按住 `Option` 拖动正文.
 
 | 内容 | 控件, 从左到右 |
 | --- | --- |
