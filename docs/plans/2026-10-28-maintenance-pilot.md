@@ -12,3 +12,11 @@ Sequence:
 5. Existing signing/notary/Sparkle helpers only. Public readback + real upgrade precede completion/closure. Reconcile failures with checkpoints, never replay a completed release. Update existing heartbeat prompt preserving scheduler-owned recurrence. Close out with outcome/next action and archive completed worker worktree after evidence is copied.
 
 Acceptance: a cold next activation can identify outcome and unfinished work without reading old logs; idle status hides old notification bodies; invalid closeout cannot lose lease; no schedule field exists in new maintenance records; user clipboard and user pin data remain intact.
+
+Pilot observations and iteration:
+- Worker located trim at the clipboard boundary, reproduced four Core failures and one NSPanel integration failure before fixing. 130 Swift tests pass, including the displayed text/edit/restore/paste-again boundary and unchanged pasteboard/changeCount.
+- Isolated worktree lacked ignored website dependencies; locked `npm ci --prefix website` resolved full-check setup. Added explicit worker preflight instead of copying user configuration.
+- Coordinator's old finish only released a lease. Five regression tests now cover timestamp/outcome/journal, invalid closeout, write failure, repeat closeout and compact handoff. All 44 Python tests pass. Private run journals precede release of ownership; old state is readable.
+- Independent read-only review passed; fixed remaining Hourly UI metadata. No scheduler cadence is recorded, inspected or corrected by the maintenance flow.
+- Integrated scripts/check.sh passed (130 Swift/44 Python), Universal build passed. Visible isolated application preferences and shortcut recording worked; synthetic CUA input did not trigger Carbon paste, a tool input limitation recorded in evidence. Actual NSPasteboard/NSPanel/NSTextView integration verifies creation/edit/restore; do not infer a hotkey regression or broaden this issue from synthetic input alone. Fixture clipboard verified unchanged and restored privately. No user pin content was read.
+- Signing preflight: existing local certificate/key files and notary profile available; original me.caldis.pir public key matches via one-shot Aqua helper. Release allocated 0.1.10 / 20261028.2 after checking public releases/feed.
