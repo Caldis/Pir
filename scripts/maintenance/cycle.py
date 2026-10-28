@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -76,17 +77,24 @@ class Store:
             if renew: lease['expiresAt'] = now + renew
         return lease
 
-    def checkpoint(self, run_id, number, fields, now=None):
+    def checkpoint(self, run_id, number, fields, now=None, *, task=None):
+        if (number is None) == (task is None):
+            raise ValueError('Checkpoint requires exactly one issue number or task slug')
+        if task is not None and (len(task) > 64 or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', task)):
+            raise ValueError('Task slug must be 1..64 lowercase letters/digits separated by single hyphens')
+        collection, identity, key = ('tasks', 'task', task) if task is not None else ('issues', 'issue', str(number))
         now = time.time() if now is None else now
         with self.transaction() as data:
             self.require(data, run_id, now)
-            previous = data['issues'].get(str(number), {})
+            previous = data.get(collection, {}).get(key, {})
             changed = (previous.get('phase') == 'verified' and fields.get('fingerprint')
                        and previous.get('fingerprint') != fields['fingerprint'])
             item = {} if changed else dict(previous)
             item.update(fields)
             if fields.get('phase') == 'blocked' and previous.get('phase') != 'blocked':
                 item.setdefault('resumePhase', previous.get('phase', 'triaged'))
+            if task is not None and (not isinstance(item.get('plan'), str) or not item['plan'].strip()):
+                raise ValueError('Task checkpoints require a plan path/URL')
             phase = item.get('phase')
             if phase not in PHASES:
                 raise ValueError('Unknown maintenance phase')
@@ -96,8 +104,8 @@ class Store:
                 raise ValueError('No-app-release completion requires an explicit reason')
             if changed:
                 history = data.setdefault('history', [])
-                history.append({'issue': number, **previous})
-            data['issues'][str(number)] = item
+                history.append({identity: task if task is not None else number, **previous})
+            data.setdefault(collection, {})[key] = item
             item['updatedAt'] = now
             item['runId'] = run_id
         return item
@@ -110,7 +118,7 @@ class Store:
 
     def summary(self):
         data = self.read()
-        fields = ('phase', 'fingerprint', 'pr', 'prHeadSha', 'mergeSha', 'buildSha', 'tagSha',
+        fields = ('plan', 'phase', 'fingerprint', 'pr', 'prHeadSha', 'mergeSha', 'buildSha', 'tagSha',
                   'release', 'version', 'build', 'worktree', 'branch', 'nextAction',
                   'externalJob', 'retryWhen', 'resumePhase', 'evidence')
         notifications = {}
@@ -120,6 +128,9 @@ class Store:
         return {'repository': REPO, 'lease': data.get('lease'), 'lastRun': data.get('lastRun'),
                 'issues': {number: {k: item[k] for k in fields if k in item}
                            for number, item in data['issues'].items() if item.get('phase') != 'verified'},
+                'tasks': {slug: {k: item[k] for k in fields if k in item}
+                          for slug, item in data.get('tasks', {}).items() if item.get('phase') != 'verified'},
+                'verifiedTaskCount': sum(item.get('phase') == 'verified' for item in data.get('tasks', {}).values()),
                 'verifiedCount': sum(item.get('phase') == 'verified' for item in data['issues'].values()),
                 'notifications': notifications}
 
@@ -131,7 +142,8 @@ class Store:
             if not data.get('lease') and data.get('lastRun', {}).get('id') == run_id:
                 return data['lastRun']
             lease = self.require(data, run_id, now)
-            if outcome == 'idle' and any(item.get('phase') != 'verified' for item in data['issues'].values()):
+            if outcome == 'idle' and any(item.get('phase') != 'verified'
+                    for collection in ('issues', 'tasks') for item in data.get(collection, {}).values()):
                 raise ValueError('Unfinished checkpoints require a waiting/blocked/failed or completed cycle result')
             result = {**lease, 'finishedAt': now, 'outcome': outcome}
             for key, value in (('note', note), ('nextAction', next_action), ('evidence', evidence)):
@@ -216,7 +228,11 @@ def scan(store):
                        'state': issue['state'], 'fingerprint': digest,
                        'action': action(previous, digest), 'previous': previous})
     result.sort(key=lambda x: (x['action'] != 'resume', x['number']))
-    return {'repository': REPO, 'lease': state.get('lease'), 'issues': result}
+    tasks = [{'task': slug, 'action': 'blocked' if record.get('phase') == 'blocked' else 'resume',
+              'previous': record} for slug, record in state.get('tasks', {}).items()
+             if record.get('phase') != 'verified']
+    tasks.sort(key=lambda x: (x['action'] != 'resume', x['task']))
+    return {'repository': REPO, 'lease': state.get('lease'), 'issues': result, 'tasks': tasks}
 
 
 def main():
@@ -238,7 +254,12 @@ def main():
             sub.add_argument('--next-action')
             sub.add_argument('--evidence', action='append')
         if name == 'guard': sub.add_argument('--renew', type=int, choices=range(60, 86401), metavar='SECONDS')
-        if name in ('checkpoint', 'comment'): sub.add_argument('--issue', required=True, type=int)
+        if name == 'comment': sub.add_argument('--issue', required=True, type=int)
+        if name == 'checkpoint':
+            identity = sub.add_mutually_exclusive_group(required=True)
+            identity.add_argument('--issue', type=int)
+            identity.add_argument('--task')
+            sub.add_argument('--plan')
         if name == 'checkpoint':
             sub.add_argument('--phase', choices=PHASES, required=True)
             for field in ('fingerprint', 'sha', 'release', 'note', 'version', 'build',
@@ -261,13 +282,13 @@ def main():
                               next_action=args.next_action, evidence=args.evidence)
     elif args.command == 'checkpoint':
         fields = {k: v for k, v in vars(args).items() if k in
-                  ('phase', 'fingerprint', 'sha', 'release', 'note', 'pr', 'evidence', 'version', 'build',
+                  ('plan', 'phase', 'fingerprint', 'sha', 'release', 'note', 'pr', 'evidence', 'version', 'build',
                    'pr_head_sha', 'merge_sha', 'build_sha', 'tag_sha', 'retry_when', 'resume_phase', 'worktree', 'branch', 'next_action', 'external_job') if v is not None}
         aliases = {'pr_head_sha': 'prHeadSha', 'merge_sha': 'mergeSha', 'build_sha': 'buildSha',
                    'tag_sha': 'tagSha', 'retry_when': 'retryWhen', 'resume_phase': 'resumePhase',
                    'next_action': 'nextAction', 'external_job': 'externalJob'}
         fields = {aliases.get(k, k): v for k, v in fields.items()}
-        result = store.checkpoint(args.run_id, args.issue, fields)
+        result = store.checkpoint(args.run_id, args.issue, fields, task=args.task)
     else:
         store.guard(args.run_id)
         if args.dry_run: result = {'dryRun': True, 'body': args.body_file.read_text()}

@@ -1,4 +1,7 @@
 import importlib.util
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -184,3 +187,131 @@ class MaintenanceTests(unittest.TestCase):
     def test_changed_input_on_blocked_merged_release_resumes_existing_work(self):
         previous = {'phase': 'blocked', 'resumePhase': 'merged', 'pr': 40, 'fingerprint': 'old'}
         self.assertEqual(self.m.action(previous, 'new'), 'resume')
+
+    def task_checkpoint(self, run_id, fields, now=101, slug='task-recovery'):
+        return self.store.checkpoint(run_id, None, fields, now=now, task=slug)
+
+    def test_task_checkpoint_preserves_blocked_context_and_release_gates(self):
+        run = self.store.begin(now=100, ttl=120)
+        self.task_checkpoint(run['id'], {'phase': 'merged', 'plan': 'docs/plans/recovery.md',
+            'pr': 41, 'mergeSha': 'abc', 'worktree': '/tmp/worker',
+            'branch': 'codex/task-recovery', 'externalJob': 'github:42',
+            'nextAction': 'Read current head CI'})
+        self.task_checkpoint(run['id'], {'phase': 'blocked', 'retryWhen': 'CI succeeds'}, now=102)
+        item = self.task_checkpoint(run['id'], {'phase': 'blocked', 'note': 'Still pending'}, now=103)
+        self.assertEqual(item['resumePhase'], 'merged')
+        self.assertEqual(item['pr'], 41)
+        self.assertEqual(item['mergeSha'], 'abc')
+        self.assertEqual(item['plan'], 'docs/plans/recovery.md')
+        self.assertEqual(item['externalJob'], 'github:42')
+        before = self.store.path.read_bytes()
+        for phase in ('prepared', 'published', 'verified'):
+            with self.assertRaises(ValueError):
+                self.task_checkpoint(run['id'], {'phase': phase}, now=104)
+            self.assertEqual(before, self.store.path.read_bytes())
+        with self.assertRaises(ValueError):
+            self.task_checkpoint(run['id'], {'phase': 'verified', 'release': 'not-required',
+                'evidence': ['ci.json'], 'note': ''}, now=104)
+        self.task_checkpoint(run['id'], {'phase': 'verified', 'release': 'not-required',
+            'evidence': ['ci.json'], 'note': 'Tooling only'}, now=105)
+        self.assertEqual(self.store.summary()['verifiedTaskCount'], 1)
+        self.assertEqual(self.store.summary()['tasks'], {})
+
+    def test_invalid_task_identity_plan_and_lease_do_not_mutate_state(self):
+        run = self.store.begin(now=100, ttl=120)
+        before = self.store.path.read_bytes()
+        for slug in ('../escape', 'UPPER', 'a_b', 'a--b', '', 'a' * 65):
+            with self.subTest(slug=slug), self.assertRaises(ValueError):
+                self.task_checkpoint(run['id'], {'phase': 'implementing', 'plan': 'plan.md'}, slug=slug)
+            self.assertEqual(before, self.store.path.read_bytes())
+        for fields in ({'phase': 'implementing'}, {'phase': 'implementing', 'plan': '   '}):
+            with self.assertRaises(ValueError):
+                self.task_checkpoint(run['id'], fields)
+            self.assertEqual(before, self.store.path.read_bytes())
+        with self.assertRaises(self.m.Busy):
+            self.task_checkpoint('wrong', {'phase': 'implementing', 'plan': 'plan.md'})
+        self.assertEqual(before, self.store.path.read_bytes())
+        with self.assertRaises(ValueError):
+            self.store.checkpoint(run['id'], 39, {'phase': 'implementing', 'plan': 'plan.md'},
+                now=101, task='task-recovery')
+        self.assertEqual(before, self.store.path.read_bytes())
+
+    def test_task_scan_is_read_only_and_keeps_tasks_separate_from_new_issues(self):
+        run = self.store.begin(now=100, ttl=120)
+        for slug, phase in (('resume-work', 'implementing'), ('blocked-work', 'blocked'), ('done-work', 'verified')):
+            fields = {'phase': phase, 'plan': 'plan.md', 'pr': 41, 'nextAction': 'Read PR'}
+            if phase == 'verified': fields.update(release='not-required', evidence=['ci.json'], note='Tooling')
+            self.task_checkpoint(run['id'], fields, slug=slug)
+        before = self.store.path.read_bytes()
+        calls = []
+        def api(endpoint, method='GET', data=None):
+            calls.append((endpoint, method))
+            if endpoint == 'user': return {'login': 'Caldis'}
+            if 'state=open' in endpoint:
+                return [{'number': 39, 'title': 'Bug', 'body': '', 'labels': [],
+                    'state': 'open', 'html_url': 'https://github.com/Caldis/Pir/issues/39'}]
+            if '/comments' in endpoint: return []
+            self.fail('Task must not produce a GitHub issue lookup')
+        with patch.object(self.m, 'gh_api', api):
+            result = self.m.scan(self.store)
+        self.assertEqual(before, self.store.path.read_bytes())
+        self.assertEqual([(x['task'], x['action']) for x in result['tasks']],
+            [('resume-work', 'resume'), ('blocked-work', 'blocked')])
+        self.assertEqual(result['tasks'][0]['previous']['plan'], 'plan.md')
+        self.assertEqual([(x['number'], x['action']) for x in result['issues']], [(39, 'new')])
+        self.assertTrue(all(method == 'GET' for _, method in calls))
+
+    def test_task_reopened_with_new_fingerprint_records_distinct_history(self):
+        run = self.store.begin(now=100, ttl=120)
+        fields = {'phase': 'verified', 'plan': 'plan.md', 'fingerprint': 'old',
+            'release': 'not-required', 'note': 'Tooling', 'evidence': ['ci.json']}
+        self.task_checkpoint(run['id'], fields)
+        self.store.checkpoint(run['id'], 39, fields, now=101)
+        self.task_checkpoint(run['id'], {'phase': 'implementing', 'plan': 'new-plan.md',
+            'fingerprint': 'new'}, now=102)
+        self.store.checkpoint(run['id'], 39, {'phase': 'implementing', 'fingerprint': 'new'}, now=102)
+        history = self.store.read()['history']
+        self.assertEqual(history[0]['task'], 'task-recovery')
+        self.assertNotIn('issue', history[0])
+        self.assertEqual(history[1]['issue'], 39)
+        self.assertNotIn('task', history[1])
+        self.assertNotIn('release', self.store.read()['tasks']['task-recovery'])
+
+    def test_old_issue_only_state_supports_task_checkpoint_without_migration(self):
+        old = {'schema': 1, 'repository': self.m.REPO, 'issues': {'39': {'phase': 'merged'}}, 'lease': None}
+        self.store.path.write_text(json.dumps(old))
+        self.assertEqual(self.store.summary()['tasks'], {})
+        self.assertEqual(json.loads(self.store.path.read_text()), old)
+        run = self.store.begin(now=100, ttl=120)
+        self.task_checkpoint(run['id'], {'phase': 'implementing', 'plan': 'plan.md'})
+        self.assertEqual(self.store.read()['issues'], old['issues'])
+
+    def test_real_cli_recovers_task_across_two_runs_and_rejects_false_idle(self):
+        def cli(*args, expected=0):
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/maintenance/cycle.py'),
+                '--state-dir', self.directory.name, *args], text=True, capture_output=True)
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            return json.loads(result.stdout) if result.stdout else None
+        first = cli('begin')['id']
+        cli('checkpoint', '--run-id', first, '--task', 'task-recovery', '--phase', 'pr_open',
+            '--plan', 'plan.md', '--pr', '41', '--pr-head-sha', 'abc', '--branch', 'codex/task-recovery',
+            '--worktree', '/tmp/worker', '--next-action', 'Read current head CI', '--evidence', 'ci.json')
+        cli('finish', '--run-id', first, '--outcome', 'waiting')
+        recovered = cli('status')['tasks']['task-recovery']
+        self.assertEqual(recovered['prHeadSha'], 'abc')
+        self.assertEqual(recovered['plan'], 'plan.md')
+        second = cli('begin')['id']
+        self.assertNotEqual(first, second)
+        before = self.store.path.read_bytes()
+        cli('checkpoint', '--run-id', first, '--task', 'task-recovery', '--phase', 'merged', expected=75)
+        cli('finish', '--run-id', second, '--outcome', 'idle', expected=1)
+        cli('checkpoint', '--run-id', second, '--issue', '39', '--task', 'task-recovery',
+            '--phase', 'merged', expected=2)
+        cli('comment', '--run-id', second, '--task', 'task-recovery', '--phase', 'verified',
+            '--body-file', 'unused', expected=2)
+        self.assertEqual(before, self.store.path.read_bytes())
+        cli('checkpoint', '--run-id', second, '--task', 'task-recovery', '--phase', 'merged', '--merge-sha', 'def')
+        cli('checkpoint', '--run-id', second, '--task', 'task-recovery', '--phase', 'verified',
+            '--release', 'not-required', '--note', 'Tooling only')
+        self.assertEqual(cli('status')['tasks'], {})
+        cli('finish', '--run-id', second, '--outcome', 'completed')
