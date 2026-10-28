@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -46,11 +47,10 @@ def item(identity='PVTI_A', kind='Issue', repository='Caldis/Pir', status='todo-
 class ProjectsTests(unittest.TestCase):
     def setUp(self):
         self.m = module()
-        auth = patch.object(self.m, 'app_client')
-        self.auth = auth.start().return_value
+        auth = patch.object(self.m, 'owner_environment')
+        self.auth = auth.start()
         self.addCleanup(auth.stop)
-        self.auth.environment.return_value = {'GH_TOKEN': 'offline-fixture'}
-        self.auth.actor.return_value = 'caldis-pir-maintainer[bot]'
+        self.auth.return_value = {'GH_TOKEN': 'offline-fixture'}
 
     def scan(self, items, pending=None, meta=None):
         meta = meta or metadata()
@@ -334,15 +334,145 @@ class ProjectsTests(unittest.TestCase):
             self.assertIn('Read denied', err.getvalue())
 
 
+class ProjectOwnerIdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.m = module()
+
+    def completed(self, output='', code=0):
+        return subprocess.CompletedProcess([], code, output, 'private credential detail')
+
+    def test_owner_token_selected_and_verified_before_project_read(self):
+        inherited = {'GH_TOKEN': 'bot-token', 'GITHUB_TOKEN': 'other-token',
+                     'GH_ENTERPRISE_TOKEN': 'enterprise-token', 'GITHUB_ENTERPRISE_TOKEN': 'other-enterprise',
+                     'GH_CONFIG_DIR': '/bot/config', 'GH_HOST': 'wrong.host', 'GH_DEBUG': 'api',
+                     'HOME': '/owner/home', 'PATH': '/usr/bin'}
+        replies = [self.completed('owner-secret\n'), self.completed('Caldis\n'),
+                   self.completed(json.dumps({'data': {'user': {}}}))]
+        with patch.dict(os.environ, inherited, clear=True), patch.object(self.m.subprocess, 'run', side_effect=replies) as run:
+            self.m.graphql('query {}', {})
+        first, actor, project = run.call_args_list
+        self.assertEqual(first.args[0], ['gh', 'auth', 'token', '--hostname', 'github.com', '--user', 'Caldis'])
+        self.assertNotIn('GH_TOKEN', first.kwargs['env'])
+        self.assertNotIn('GH_CONFIG_DIR', first.kwargs['env'])
+        self.assertEqual(first.kwargs['env']['HOME'], '/owner/home')
+        for call in (actor, project):
+            self.assertEqual(call.kwargs['env']['GH_TOKEN'], 'owner-secret')
+            self.assertEqual(call.kwargs['env']['GH_HOST'], 'github.com')
+            for name in ('GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_DEBUG', 'GH_CONFIG_DIR'):
+                self.assertNotIn(name, call.kwargs['env'])
+            self.assertNotIn('owner-secret', str(call.args))
+        self.assertEqual(actor.args[0], ['gh', 'api', '--hostname', 'github.com', 'user', '--jq', '.login'])
+        self.assertEqual(project.args[0][:3], ['gh', 'api', 'graphql'])
+
+    def test_missing_wrong_or_failed_owner_auth_prevents_project_read(self):
+        for replies in ([self.completed('', 1)], [self.completed('')],
+                        [self.completed('owner-secret'), self.completed('someone-else')],
+                        [self.completed('owner-secret'), self.completed('Caldis', 1)]):
+            with self.subTest(replies=replies), patch.object(self.m.subprocess, 'run', side_effect=replies) as run:
+                with self.assertRaises(self.m.ScanError) as failure:
+                    self.m.graphql('query {}', {})
+                self.assertLessEqual(run.call_count, 2)
+                self.assertNotIn('owner-secret', str(failure.exception))
+                self.assertNotIn('private credential', str(failure.exception))
+                self.assertIn('owner', str(failure.exception))
+
+    def test_auth_execution_errors_are_sanitized(self):
+        for error in (OSError('owner-secret'), subprocess.TimeoutExpired('owner-secret', 30)):
+            with patch.object(self.m.subprocess, 'run', side_effect=error):
+                with self.assertRaises(self.m.ScanError) as failure:
+                    self.m.owner_environment()
+                self.assertNotIn('owner-secret', str(failure.exception))
+
+    def test_owner_runner_rejects_non_project_commands_before_authentication(self):
+        for command in (['gh', 'issue', 'close', '1'], ['gh', 'pr', 'merge', '1'],
+                        ['gh', 'repo', 'edit'], ['gh', 'api', 'graphql'], ['git', 'push'],
+                        ['gh', 'project', 'delete', '7'],
+                        ['gh', 'project', 'view', '7', '--hostname=evil.example'],
+                        ['gh', 'project', 'view', '7', '--owner', 'someone-else']):
+            with self.subTest(command=command), patch.object(self.m, 'owner_environment') as auth:
+                with self.assertRaises(self.m.ScanError):
+                    self.m.owner_run(command)
+                auth.assert_not_called()
+
+    def test_owner_runner_executes_project_command_and_redacts_credential(self):
+        with patch.object(self.m, 'owner_environment', return_value={'GH_TOKEN': 'owner-secret'}) as auth, \
+             patch.object(self.m.subprocess, 'run', return_value=self.completed('result owner-secret')) as run, \
+             patch('sys.stdout', new_callable=io.StringIO) as output:
+            self.assertEqual(self.m.main(['--owner-run', '--', 'gh', 'project', 'view', '7', '--owner', 'Caldis']), 0)
+        auth.assert_called_once()
+        self.assertEqual(run.call_args.args[0][:3], ['gh', 'project', 'view'])
+        self.assertNotIn('owner-secret', output.getvalue())
+        self.assertIn('[REDACTED]', output.getvalue())
+
+    def test_owner_runner_failure_does_not_forward_child_output(self):
+        with patch.object(self.m, 'owner_environment', return_value={'GH_TOKEN': 'owner-secret'}), \
+             patch.object(self.m.subprocess, 'run', return_value=self.completed('private response', 1)), \
+             patch('sys.stdout', new_callable=io.StringIO) as output, \
+             patch('sys.stderr', new_callable=io.StringIO) as error:
+            self.assertEqual(self.m.main(['--owner-run', '--', 'gh', 'project', 'view', '7', '--owner', 'Caldis']), 1)
+        self.assertEqual(output.getvalue(), '')
+        self.assertNotIn('private', error.getvalue())
+
+
+    def test_project_number_and_owner_must_be_explicit_and_unique(self):
+        for arguments in (['8', '--owner', 'Caldis'], ['7'], ['7', '--owner=@me'],
+                          ['7', '--owner', 'Caldis', '--owner=other'],
+                          ['7', '--owner', 'Caldis', '--header', 'secret'],
+                          ['7', '--owner', 'Caldis', '--web'], ['7', '8', '--owner', 'Caldis']):
+            with self.subTest(arguments=arguments), patch.object(self.m, 'owner_environment') as auth:
+                with self.assertRaises(self.m.ScanError):
+                    self.m.owner_run(['gh', 'project', 'view'] + arguments)
+                auth.assert_not_called()
+
+    def snapshot(self):
+        return {'project': metadata(), 'fields': metadata()['fields']['nodes'],
+                'items': [{'itemId': 'PVTI_ISSUE', 'content': item()['content']},
+                          {'itemId': 'PVTI_DRAFT', 'content': item('draft', 'DraftIssue')['content']}]}
+
+    def test_id_based_mutations_reject_foreign_ids_and_real_issue_body_edits(self):
+        for arguments in (['item-edit', '--id', 'PVTI_ISSUE', '--body', 'change repo issue'],
+                          ['item-edit', '--id', 'CONTENT_PVTI_A', '--title', 'change repo issue'],
+                          ['item-edit', '--id', 'foreign', '--title', 'draft'],
+                          ['item-edit', '--id', 'PVTI_ISSUE', '--project-id', 'foreign', '--field-id', 'STATUS', '--text', 'x'],
+                          ['item-edit', '--id', 'PVTI_ISSUE', '--project-id', metadata()['id'], '--field-id', 'foreign', '--text', 'x'],
+                          ['item-delete', '7', '--owner', 'Caldis', '--id', 'foreign'],
+                          ['item-archive', '7', '--owner', 'Caldis', '--id', 'foreign'],
+                          ['field-delete', '7', '--owner', 'Caldis', '--id', 'foreign']):
+            with self.subTest(arguments=arguments), patch.object(self.m, 'scan', return_value=self.snapshot()), \
+                 patch.object(self.m, 'owner_environment') as auth:
+                with self.assertRaises(self.m.ScanError):
+                    self.m.owner_run(['gh', 'project'] + arguments)
+                auth.assert_not_called()
+
+    def test_partial_draft_edits_fail_closed_before_mutation(self):
+        for change in (['--body', 'updated body'], ['--title', 'updated title']):
+            with self.subTest(change=change), patch.object(self.m, 'scan', return_value=self.snapshot()), \
+                 patch.object(self.m, 'owner_environment') as auth, \
+                 patch.object(self.m.subprocess, 'run') as run:
+                with self.assertRaises(self.m.ScanError):
+                    self.m.owner_run(['gh', 'project', 'item-edit', '--id', 'CONTENT_draft'] + change)
+                auth.assert_not_called()
+                run.assert_not_called()
+
+    def test_id_based_mutations_accept_matching_project_item_draft_and_field(self):
+        for arguments in (['item-edit', '--id', 'PVTI_ISSUE', '--project-id', metadata()['id'], '--field-id', 'STATUS', '--single-select-option-id', 'doing-real'],
+                          ['item-edit', '--id', 'CONTENT_draft', '--title', 'existing title', '--body', 'new draft body'],
+                          ['item-delete', '7', '--owner', 'Caldis', '--id', 'PVTI_DRAFT'],
+                          ['field-delete', '7', '--owner', 'Caldis', '--id', 'STATUS']):
+            with self.subTest(arguments=arguments), patch.object(self.m, 'scan', return_value=self.snapshot()) as scan, \
+                 patch.object(self.m, 'owner_environment', return_value={'GH_TOKEN': 'owner-secret'}), \
+                 patch.object(self.m.subprocess, 'run', return_value=self.completed()) as run:
+                self.assertEqual(self.m.owner_run(['gh', 'project'] + arguments), 0)
+                scan.assert_called_once()
+                run.assert_called_once()
+
+    def test_id_based_mutations_fail_closed_when_snapshot_unavailable(self):
+        with patch.object(self.m, 'scan', side_effect=self.m.ScanError('snapshot unavailable')), \
+             patch.object(self.m, 'owner_environment') as auth:
+            with self.assertRaises(self.m.ScanError):
+                self.m.owner_run(['gh', 'project', 'item-edit', '--id', 'PVTI_DRAFT', '--body', 'new body'])
+            auth.assert_not_called()
+
+
 if __name__ == '__main__':
     unittest.main()
-
-
-class ProjectAppIdentityTests(unittest.TestCase):
-    def test_missing_app_auth_stops_before_gh_and_never_falls_back(self):
-        m = module()
-        with patch.object(m, 'app_client') as auth, patch.object(m.subprocess, 'run') as run:
-            auth.return_value.environment.side_effect = m._auth.AuthError('GitHub App local credential is unavailable')
-            with self.assertRaises(m.ScanError) as failure: m.graphql('query {}', {})
-            run.assert_not_called()
-            self.assertIn('no owner credential fallback', str(failure.exception))

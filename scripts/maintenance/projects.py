@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
-"""Read-only, complete snapshot of Caldis's personal Pir Project (number 7)."""
+"""Snapshot Caldis Project #7 and run narrowly scoped owner Project commands."""
 import argparse
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
-
-# Load from this checkout without depending on the caller's working directory or PYTHONPATH.
-_auth_spec = importlib.util.spec_from_file_location('pir_github_app', Path(__file__).with_name('github_app.py'))
-_auth = importlib.util.module_from_spec(_auth_spec)
-_auth_spec.loader.exec_module(_auth)
-
-
-def app_client():
-    return _auth.client()
-
 
 OWNER = 'Caldis'
 NUMBER = 7
@@ -101,15 +92,126 @@ class ScanError(RuntimeError):
     """A complete, safe snapshot was unavailable; callers must not triage partial data."""
 
 
+def owner_environment():
+    # Select the stored owner account without switching gh's active account. Tokens
+    # and debug overrides inherited from the App runner must never affect this path.
+    env = {key: value for key, value in os.environ.items()
+           if key not in ('GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN',
+                          'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST', 'GH_CONFIG_DIR',
+                          'GH_DEBUG', 'GIT_CURL_VERBOSE')
+           and not key.startswith('GIT_TRACE')}
+    env.update(GH_HOST='github.com', GH_PROMPT_DISABLED='1')
+    try:
+        token = subprocess.run(['gh', 'auth', 'token', '--hostname', 'github.com', '--user', OWNER],
+                               env=env, capture_output=True, text=True, timeout=30)
+        if token.returncode or not token.stdout.strip() or len(token.stdout.strip().splitlines()) != 1:
+            raise ScanError('GitHub Project owner authentication unavailable; stored Caldis account required')
+        env = {**env, 'GH_TOKEN': token.stdout.strip()}
+        actor = subprocess.run(['gh', 'api', '--hostname', 'github.com', 'user', '--jq', '.login'],
+                               env=env, capture_output=True, text=True, timeout=30)
+        if actor.returncode or actor.stdout.strip() != OWNER:
+            raise ScanError('GitHub Project owner identity verification failed; expected Caldis')
+    except (OSError, subprocess.TimeoutExpired):
+        raise ScanError('GitHub Project owner authentication failed or timed out') from None
+    return env
+
+
+# An explicit allowlist prevents the owner credential from being used for gh API,
+# repository, issue, PR, auth, extension, or arbitrary shell commands.
+PROJECT_FLAGS = {
+    'view': {},
+    'field-list': {'limit': True},
+    'item-list': {'limit': True},
+    'field-create': {'name': True, 'data-type': True, 'single-select-options': True},
+    'field-delete': {'id': True},
+    'item-add': {'url': True},
+    'item-create': {'title': True, 'body': True},
+    'item-delete': {'id': True},
+    'item-archive': {'id': True, 'undo': False},
+    'item-edit': {'id': True, 'project-id': True, 'field-id': True, 'body': True,
+                  'title': True, 'text': True, 'number': True, 'date': True,
+                  'single-select-option-id': True, 'iteration-id': True, 'clear': False},
+}
+
+
+def project_command(command):
+    if len(command) < 3 or command[:2] != ['gh', 'project'] or command[2] not in PROJECT_FLAGS:
+        raise ScanError('Project owner runner accepts supported gh project commands only')
+    verb = command[2]
+    # Browser launch adds another credential/session boundary and is unnecessary.
+    allowed = {**PROJECT_FLAGS[verb], 'format': True, 'jq': True, 'template': True}
+    if verb != 'item-edit': allowed['owner'] = True
+    values, positionals = {}, []
+    args = iter(command[3:])
+    for argument in args:
+        if not argument.startswith('--'):
+            positionals.append(argument)
+            continue
+        key, equals, value = argument[2:].partition('=')
+        if key not in allowed or key in values or (equals and not allowed[key]):
+            raise ScanError('Project owner runner received an unsupported or repeated option')
+        if allowed[key]:
+            if not equals:
+                value = next(args, None)
+            if value is None:
+                raise ScanError('Project owner runner option requires a value')
+            values[key] = value
+        else:
+            values[key] = True
+    if verb == 'item-edit':
+        if positionals or not values.get('id'):
+            raise ScanError('Project owner item edit requires an explicit item ID')
+    elif positionals != [str(NUMBER)] or values.get('owner') != OWNER:
+        raise ScanError('Project owner runner requires explicit Caldis Project #7')
+    return verb, values
+
+
+def owner_run(command):
+    verb, values = project_command(command)
+    if verb in ('item-edit', 'item-delete', 'item-archive', 'field-delete'):
+        snapshot = scan()
+        fields = {field['id'] for field in snapshot['fields']}
+        items = {item['itemId']: item for item in snapshot['items']}
+        drafts = {item['content']['id']: item for item in snapshot['items']
+                  if item['content'] and item['content']['__typename'] == 'DraftIssue'}
+        identity = values.get('id')
+        if verb == 'field-delete':
+            valid = identity in fields
+        elif verb == 'item-edit':
+            if 'title' in values or 'body' in values:
+                # Installed gh may replace omitted draft content with empty strings.
+                if 'title' not in values or 'body' not in values:
+                    raise ScanError('Project draft edit requires both title and body to preserve existing content')
+                valid = identity in drafts or (identity in items and items[identity]['content']
+                    and items[identity]['content']['__typename'] == 'DraftIssue')
+                valid = valid and not any(key in values for key in ('project-id', 'field-id', 'clear',
+                    'text', 'number', 'date', 'single-select-option-id', 'iteration-id'))
+            else:
+                valid = (identity in items and values.get('project-id') == snapshot['project']['id']
+                         and values.get('field-id') in fields)
+        else:
+            valid = identity in items
+        if not valid:
+            raise ScanError('Project owner runner ID is not a matching Caldis Project #7 item, draft or field')
+    env = owner_environment()
+    try:
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=90)
+    except (OSError, subprocess.TimeoutExpired):
+        raise ScanError('GitHub Project owner command failed or timed out; read back before retrying writes') from None
+    if result.returncode:
+        raise ScanError('GitHub Project owner command failed; read back before retrying writes')
+    # Never forward child stderr, and redact even successful output defensively.
+    sys.stdout.write(result.stdout.replace(env['GH_TOKEN'], '[REDACTED]'))
+    return 0
+
+
 def graphql(query, variables):
     # Never return gh stderr or GraphQL error text: either can contain private data.
     payload = {'query': query, 'variables': variables}
     try:
         result = subprocess.run(['gh', 'api', 'graphql', '--input', '-'],
                                 input=json.dumps(payload), text=True,
-                                capture_output=True, timeout=90, env=app_client().environment())
-    except _auth.AuthError:
-        raise ScanError('GitHub App Project access unavailable; no owner credential fallback') from None
+                                capture_output=True, timeout=90, env=owner_environment())
     except subprocess.TimeoutExpired:
         raise ScanError('GitHub Project read timed out after 90 seconds') from None
     except OSError:
@@ -121,7 +223,7 @@ def graphql(query, variables):
             failed = None
         if isinstance(failed, dict) and failed.get('errors'):
             raise ScanError('GitHub Project GraphQL read failed; check query and permissions; snapshot discarded')
-        raise ScanError('GitHub App Project read failed; prove access to Caldis Project #7; no owner credential fallback')
+        raise ScanError('GitHub Project owner read failed; verify access to Caldis Project #7')
     try:
         response = json.loads(result.stdout)
     except (ValueError, TypeError):
@@ -395,8 +497,16 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state-dir', type=Path, default=Path.home() / '.config/pir/maintenance',
                         help='Read existing cycle.py Store checkpoints without modifying them')
+    parser.add_argument('--owner-run', nargs=argparse.REMAINDER, help='Run a restricted gh project command as Caldis')
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if '--owner-run' in argv:
+        index = argv.index('--owner-run') + 1
+        if argv[index:index + 1] == ['--']: del argv[index]
     args = parser.parse_args(argv)
     try:
+        if args.owner_run is not None:
+            command = args.owner_run[1:] if args.owner_run[:1] == ['--'] else args.owner_run
+            return owner_run(command)
         result = scan(pending=read_pending(args.state_dir))
     except (ScanError, ValueError, OSError):
         # Only our fixed diagnostic text is safe to expose; raw state/API exceptions are not.
