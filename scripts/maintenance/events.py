@@ -131,6 +131,11 @@ class Queue:
             row = db.execute("SELECT created FROM batches WHERE id=? AND status='unknown'", (batch,)).fetchone()
             run = state.get('lastRun', {})
             marker = batch_marker(batch) + ' processed'
+            evidence = run.get('evidence')
+            if isinstance(evidence, str): evidence = [evidence]
+            if not isinstance(evidence, list) or not evidence or any(
+                    not isinstance(item, str) or not item.strip() for item in evidence):
+                raise ValueError('Cycle evidence must contain nonempty path/reference strings')
             if (not row or state.get('lease') or not run.get('id') or not run.get('evidence') or
                     run.get('startedAt', 0) <= row['created'] or
                     run.get('finishedAt', 0) < run.get('startedAt', 0) or
@@ -138,7 +143,7 @@ class Queue:
                     marker not in run.get('note', '').splitlines()):
                 raise ValueError('Matching finished maintenance cycle and evidence required')
             db.execute("UPDATE batches SET status='completed',cycle_run=?,cycle_evidence=? WHERE id=?",
-                       (run['id'], run['evidence'], batch))
+                       (run['id'], json.dumps(evidence), batch))
 
     def acknowledge_available(self, state):
         for batch in self.status()['batches']:
@@ -162,8 +167,15 @@ class Queue:
 
     def status(self):
         with self.connect() as db:
+            batches = [dict(row) for row in db.execute('SELECT * FROM batches ORDER BY created DESC LIMIT 20')]
+            for batch in batches:
+                evidence = batch['cycle_evidence']
+                if evidence is not None:
+                    try: evidence = json.loads(evidence)
+                    except ValueError: evidence = [evidence]
+                    batch['cycle_evidence'] = evidence if isinstance(evidence, list) else [evidence]
             return {'pending': db.execute('SELECT COUNT(*) FROM deliveries WHERE batch IS NULL').fetchone()[0],
-                    'batches': [dict(row) for row in db.execute('SELECT * FROM batches ORDER BY created DESC LIMIT 20')]}
+                    'batches': batches}
 
 
 def read_state(path):

@@ -44,7 +44,7 @@ class EventTestCase(unittest.TestCase):
         return {'schema': 1, 'repository': 'Caldis/Pir', 'lease': lease,
                 'lastRun': {'id': 'cycle-1', 'startedAt': started, 'finishedAt': started + 10,
                             'outcome': 'completed', 'note': self.m.batch_marker(batch) + ' processed',
-                            'evidence': '/private/cycle-evidence.json'}}
+                            'evidence': ['/private/cycle-evidence.json']}}
 
 
 class EventTests(EventTestCase):
@@ -196,6 +196,23 @@ class EventTests(EventTestCase):
         batch = self.m.Queue(path).status()['batches'][0]
         self.assertEqual(batch['status'], 'unknown')
         self.assertIsNone(batch['cycle_run'])
+
+    def test_actual_cycle_finish_evidence_roundtrips_through_queue_restart(self):
+        self.receive()
+        batch = self.queue.claim(400)
+        spec = importlib.util.spec_from_file_location('event_cycle_fixture', ROOT / 'scripts/maintenance/cycle.py')
+        cycle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cycle)
+        state = cycle.Store(self.root / 'maintenance')
+        lease = state.begin(now=401)
+        state.finish(lease['id'], now=500, outcome='completed',
+                     note=self.m.batch_marker(batch['id']) + ' processed',
+                     evidence=['/private/cycle.json', '/private/scan.json'])
+        self.queue.acknowledge(batch['id'], state.read())
+        restored = self.m.Queue(self.root / 'events.sqlite3').status()['batches'][0]
+        self.assertEqual(restored['cycle_run'], lease['id'])
+        self.assertEqual(restored['cycle_evidence'], ['/private/cycle.json', '/private/scan.json'])
+        self.assertEqual(restored['status'], 'completed')
 
     def test_shared_control_socket_requires_private_socket_owned_by_user(self):
         path = self.root / 'control.sock'
@@ -394,7 +411,7 @@ class ProtocolTests(EventTestCase):
         done = self.queue.status()['batches'][0]
         self.assertEqual(done['status'], 'completed')
         self.assertEqual(done['cycle_run'], 'cycle-1')
-        self.assertEqual(done['cycle_evidence'], '/private/cycle-evidence.json')
+        self.assertEqual(done['cycle_evidence'], ['/private/cycle-evidence.json'])
 
     def test_affirmative_busy_before_turn_start_requeues_automatically(self):
         self.receive()
