@@ -96,7 +96,25 @@ class ProjectsTests(unittest.TestCase):
         result = self.scan([child, marked])
         self.assertEqual(result['items'][0]['action'], 'new')
         self.assertEqual(result['items'][0]['parent']['number'], 1)
-        self.assertEqual(result['items'][1]['skipReason'], 'stage-child')
+        self.assertEqual(result['items'][1]['skipReason'], 'stage-linkage-unverified')
+        self.assertEqual(result['items'][1]['action'], 'blocked')
+
+    def test_stage_requires_matching_root_item_and_native_parent_across_pages(self):
+        root, child = item('root'), item('child')
+        slug = self.m.task_slug(metadata()['id'], 'root')
+        child['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:review -->'
+        child['content']['parent'] = {'id': root['content']['id'], 'url': root['content']['url']}
+        responses = [{'data': {'user': {'projectV2': metadata()}}},
+            {'data': {'node': {'id': metadata()['id'], 'items': connection([child], 'root-page')}}},
+            {'data': {'node': {'id': metadata()['id'], 'items': connection([root])}}}]
+        with patch.object(self.m, 'graphql', side_effect=responses):
+            result = self.m.scan()
+        self.assertEqual(result['items'][0]['action'], 'stage')
+        self.assertEqual(result['items'][0]['stageRoot']['taskSlug'], slug)
+        child['content']['parent']['id'] = 'wrong-parent'
+        self.assertEqual(self.scan([root, child])['items'][1]['action'], 'blocked')
+        child['content']['parent'] = None
+        self.assertEqual(self.scan([root, child])['items'][1]['action'], 'blocked')
 
     def test_done_archived_closed_deleted_blocked_and_pending_recovery(self):
         done, archived, closed, deleted, blocked = (item(x) for x in ('done', 'archived', 'closed', 'deleted', 'blocked'))

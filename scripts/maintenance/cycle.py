@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -210,6 +211,17 @@ def upsert_comment(api, number, phase, text, viewer):
     return api(endpoint, 'POST', {'body': body})
 
 
+def projects_module():
+    spec = importlib.util.spec_from_file_location('pir_cycle_projects', Path(__file__).with_name('projects.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def project_snapshot():
+    return projects_module().scan()
+
+
 def scan(store):
     state = store.read()
     viewer = gh_api('user')['login']
@@ -220,13 +232,37 @@ def scan(store):
         if record.get('phase') != 'verified' and number not in issues:
             issues[number] = gh_api(f'repos/{REPO}/issues/{number}')
     result = []
+    projects = projects_module()
+    stage_roots = None
+    source_error = None
     for number, issue in issues.items():
         comments = gh_api(f'repos/{REPO}/issues/{number}/comments?per_page=100')
         digest = fingerprint(issue, comments, viewer)
         previous = state['issues'].get(number, {})
-        result.append({'number': issue['number'], 'title': issue['title'], 'url': issue['html_url'],
-                       'state': issue['state'], 'fingerprint': digest,
-                       'action': action(previous, digest), 'previous': previous})
+        entry = {'number': issue['number'], 'title': issue['title'], 'url': issue['html_url'],
+                 'state': issue['state'], 'fingerprint': digest,
+                 'action': action(previous, digest), 'previous': previous}
+        marker = projects.parse_stage_marker(issue.get('body'))
+        if marker:
+            entry['stageMarker'] = marker
+            if stage_roots is None:
+                try:
+                    stage_roots = {item['taskSlug']: item for item in project_snapshot()['items']}
+                except (RuntimeError, OSError, ValueError):
+                    stage_roots = {}
+                    source_error = 'Project snapshot unavailable; verify stage linkage before intake'
+            try:
+                parent = gh_api(f'repos/{REPO}/issues/{number}/parent')
+                # REST's url is an API URL; the shared verifier compares public issue URLs.
+                parent = {'id': parent.get('node_id'), 'url': parent.get('html_url')}
+                entry['parent'] = parent
+                entry.update(projects.stage_linkage(marker, parent, stage_roots))
+            except (RuntimeError, OSError, ValueError, AttributeError):
+                entry.update(action='blocked', skipReason='stage-linkage-unverified', stageRoot=None)
+                entry['sourceError'] = 'Native parent unavailable; verify stage linkage before intake'
+            if source_error:
+                entry['sourceError'] = source_error
+        result.append(entry)
     result.sort(key=lambda x: (x['action'] != 'resume', x['number']))
     tasks = [{'task': slug, 'action': 'blocked' if record.get('phase') == 'blocked' else 'resume',
               'previous': record} for slug, record in state.get('tasks', {}).items()

@@ -119,6 +119,30 @@ def task_slug(project_id, item_id):
     return 'project-' + hashlib.sha256(identity).hexdigest()[:56]
 
 
+def parse_stage_marker(body):
+    matches = list(STAGE_MARKER.finditer(body or ''))
+    if not matches:
+        return None
+    # Multiple stage claims are ambiguous and must never be silently swallowed.
+    return {'taskSlug': matches[0][1], 'stage': matches[0][2], 'ambiguous': len(matches) != 1}
+
+
+def stage_linkage(marker, parent, roots):
+    root = roots.get(marker['taskSlug'])
+    content = root.get('content') if root else None
+    verified = (not marker.get('ambiguous') and isinstance(parent, dict)
+        and isinstance(content, dict) and content.get('__typename') == 'Issue'
+        and not root.get('stageMarker')
+        and content.get('repository', {}).get('nameWithOwner', '').casefold() == REPO.casefold()
+        and isinstance(content.get('id'), str) and isinstance(content.get('url'), str)
+        and parent.get('id', parent.get('node_id')) == content['id']
+        and parent.get('url') == content['url'])
+    return {'action': 'stage' if verified else 'blocked',
+            'skipReason': 'stage-child' if verified else 'stage-linkage-unverified',
+            'stageRoot': {'taskSlug': root['taskSlug'], 'itemId': root['itemId'],
+                          'issueNodeId': content['id'], 'issueURL': content['url']} if verified else None}
+
+
 def normalize(item, project, status_field, pending):
     identity = required(item, 'id', str)
     archived = required(item, 'isArchived', bool)
@@ -155,9 +179,8 @@ def normalize(item, project, status_field, pending):
         kind = required(content, '__typename', str)
         for field_name in ('id', 'title', 'body'):
             required(content, field_name, str)
-        marker = STAGE_MARKER.search(content['body'])
-        if marker:
-            result['stageMarker'] = {'taskSlug': marker[1], 'stage': marker[2]}
+        marker = parse_stage_marker(content['body'])
+        result['stageMarker'] = marker
         if kind in ('Issue', 'PullRequest'):
             repository = required(required(content, 'repository', dict), 'nameWithOwner', str)
             required(content, 'url', str)
@@ -181,13 +204,13 @@ def normalize(item, project, status_field, pending):
             result['requiresConversion'] = True
         else:
             reason = 'unsupported-content-type'
-        if marker: reason = 'stage-child'
+        if marker: reason = 'stage-linkage-unverified'
     if archived: reason = 'archived'
     if project['closed']: reason = 'closed-project'
     result['skipReason'] = reason
     if reason:
         result['action'] = 'blocked' if reason in ('blocked-status', 'unknown-status-option',
-            'unmapped-status-name', 'missing-status-selection', 'foreign-parent-repository') else 'skip'
+            'unmapped-status-name', 'missing-status-selection', 'foreign-parent-repository', 'stage-linkage-unverified') else 'skip'
     previous = pending.get(slug)
     # Local recovery survives remote completion/deletion; it is not permission to restart work.
     if previous:
@@ -239,6 +262,10 @@ def scan(*, pending=None):
         if cursor in seen: raise ScanError('GitHub Project items pagination repeated a cursor')
         seen.add(cursor)
     by_slug = {item['taskSlug']: item for item in items}
+    # Resolve after all pages: a child may precede its root in Project order.
+    for item in items:
+        if item['stageMarker']:
+            item.update(stage_linkage(item['stageMarker'], item['parent'], by_slug))
     resumes = [{'taskSlug': slug, 'previous': record, 'presentInProject': slug in by_slug,
                 'itemId': by_slug.get(slug, {}).get('itemId')}
                for slug, record in pending.items() if record.get('phase') != 'verified']
