@@ -18,3 +18,5 @@ Validation evidence:
 - `scripts/check.sh`: exit 0, 128 Swift tests, localization, website build/path checks and ReleaseTools pass. Website retains its existing Vite chunk-size advisory.
 - `uv run --with pyyaml python /Users/caldis/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/pir-maintainer`: Skill is valid. System Python lacked PyYAML; the validator used an isolated uv dependency.
 - `git diff --check`: pass. App interaction is not applicable: maintenance tooling/skill only; no application release required.
+
+Independent review reproduced missing `ok` response misclassification; a failing regression now requires unknown/no retry. A second failing regression prevents delayed obsolete blocker delivery after a newer milestone. Both are fixed; expanded suite has 11 notification / 39 total Python tests.

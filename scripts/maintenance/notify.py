@@ -70,8 +70,9 @@ def deliver(config, text):
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             body = json.loads(response.read(65536))
-        if body.get('ok') is not True:
+        if body.get('ok') is False:
             return {'status': 'failed', 'error': 'telegram-rejected'}
+        if body.get('ok') is not True: raise ValueError()
         message_id = body['result']['message_id']
         if not isinstance(message_id, int): raise ValueError()
         return {'status': 'sent', 'message_id': message_id}
@@ -104,6 +105,10 @@ def notify(store, run_id, event, config=CONFIG, *, now=None, dry_run=False):
             return public(previous)
         record = {'event': event, 'status': 'sending', 'attempts': previous.get('attempts', 0) + 1,
                   'runId': run_id, 'updatedAt': now}
+        # A newer factual transition makes an old failed-stage notification stale.
+        for old_key, old in records.items():
+            if old_key != key and old['event']['issue'] == event['issue'] and old['status'] == 'failed':
+                old.update(status='superseded')
         records[key] = record
     result = deliver(config, text)
     with store.transaction() as data:

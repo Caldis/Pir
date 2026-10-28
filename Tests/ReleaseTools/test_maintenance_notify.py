@@ -130,6 +130,26 @@ class NotificationTests(unittest.TestCase):
             api.assert_not_called()
         self.assertNotIn('SECRET', json.dumps(self.store.read()))
 
+    def test_missing_ok_is_unknown_and_never_retried(self):
+        with patch.object(self.m.urllib.request, 'urlopen', side_effect=lambda *a, **k: io.BytesIO(b'{}')) as api:
+            self.assertEqual(self.send()['status'], 'unknown')
+            self.store.finish(self.run, now=4000)
+            self.run = self.store.begin(now=4000)['id']
+            self.m.retry(self.store, self.run, self.config, now=4001)
+            self.assertEqual(api.call_count, 1)
+
+    def test_newer_milestone_supersedes_failed_old_stage(self):
+        with patch.object(self.m.urllib.request, 'urlopen', return_value=io.BytesIO(b'{"ok":false}')):
+            self.event.update(event='blocked', fact='old-blocker')
+            self.assertEqual(self.send()['status'], 'failed')
+        with patch.object(self.m.urllib.request, 'urlopen', side_effect=self.success) as api:
+            self.event.update(event='released', fact='0.1.10', version='0.1.10')
+            self.send()
+            self.store.finish(self.run, now=4000)
+            self.run = self.store.begin(now=4000)['id']
+            self.m.retry(self.store, self.run, self.config, now=4001)
+            self.assertEqual(api.call_count, 1)
+
     def test_success_and_release_are_distinct_events(self):
         with patch.object(self.m.urllib.request, 'urlopen', side_effect=self.success) as api:
             self.event.update(event='succeeded', fact='merged-sha', detail='代码已合并，应用发布待验证')
