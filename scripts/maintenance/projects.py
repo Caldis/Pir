@@ -42,16 +42,18 @@ FIELD_CONFIG = """fragment FieldConfig on ProjectV2FieldConfiguration {
   ... on ProjectV2IterationField { id name dataType }
   ... on ProjectV2MultiSelectField { id name dataType }
 }"""
+# Bound nested connections: 100 items × 100 values × four 10-node lists stays
+# below GitHub's 500,000-node query limit. Truncation still discards the snapshot.
 VALUE_TYPES = {
     'Date': 'date', 'Number': 'number', 'Text': 'text',
     'MultiSelect': 'options { id name } value',
     'SingleSelect': 'optionId name', 'Iteration': 'iterationId title startDate duration',
     'Milestone': 'milestone { id title dueOn }',
     'Repository': 'repository { id nameWithOwner }',
-    'Label': 'labels(first: 100) { nodes { id name } pageInfo { hasNextPage endCursor } }',
-    'User': 'users(first: 100) { nodes { id login } pageInfo { hasNextPage endCursor } }',
-    'Reviewer': 'reviewers(first: 100) { nodes { __typename ... on User { id login } ... on Team { id name } } pageInfo { hasNextPage endCursor } }',
-    'PullRequest': 'pullRequests(first: 100) { nodes { id url title state } pageInfo { hasNextPage endCursor } }',
+    'Label': 'labels(first: 10) { nodes { id name } pageInfo { hasNextPage endCursor } }',
+    'User': 'users(first: 10) { nodes { id login } pageInfo { hasNextPage endCursor } }',
+    'Reviewer': 'reviewers(first: 10) { nodes { __typename ... on User { id login } ... on Team { id name } } pageInfo { hasNextPage endCursor } }',
+    'PullRequest': 'pullRequests(first: 10) { nodes { id url title state } pageInfo { hasNextPage endCursor } }',
 }
 VALUE_NODES = {'Date', 'Iteration', 'MultiSelect', 'Number', 'SingleSelect', 'Text'}
 FIELD_VALUES = 'fieldValues(first: 100) { nodes { __typename ' + ' '.join(
@@ -61,7 +63,7 @@ ITEMS_QUERY = '''query($id: ID!, $cursor: String) {
   node(id: $id) { ... on ProjectV2 {
     id items(first: 100, after: $cursor) {
       nodes {
-        id isArchived
+        id isArchived fullDatabaseId
         ''' + FIELD_VALUES + '''
         fieldValueByName(name: "Status") {
           __typename
@@ -101,6 +103,12 @@ def graphql(query, variables):
     except OSError:
         raise ScanError('Cannot execute gh for GitHub Project read') from None
     if result.returncode:
+        try:
+            failed = json.loads(result.stdout)
+        except (ValueError, TypeError):
+            failed = None
+        if isinstance(failed, dict) and failed.get('errors'):
+            raise ScanError('GitHub Project GraphQL read failed; check query and permissions; snapshot discarded')
         raise ScanError('GitHub Project read failed; check gh authentication and read:project scope')
     try:
         response = json.loads(result.stdout)
@@ -169,11 +177,19 @@ def stage_linkage(marker, parent, roots):
                           'issueNodeId': content['id'], 'issueURL': content['url']} if verified else None}
 
 
-def draft_stage_linkage(marker, body, roots):
+def draft_stage_linkage(marker, body, roots, values):
     parents = re.findall(r'^Parent item: ([^\s]+)[ \t]*$', body, flags=re.MULTILINE)
     root = roots.get(marker['taskSlug'])
     content = root.get('content') if root else None
+    linked = [value.get('text') for value in values
+              if value.get('__typename') == 'ProjectV2ItemFieldTextValue'
+              and value.get('field', {}).get('name') == 'Parent item']
+    valid_links = {root['itemId'], root.get('itemURL')} if root else set()
+    valid_links.discard(None)
+    if root and root.get('itemURL'):
+        valid_links.add(root['itemURL'] + ' | ' + root['itemId'])
     verified = (not marker.get('ambiguous') and len(parents) == 1 and root is not None
+        and len(linked) <= 1 and all(link in valid_links for link in linked)
         and parents[0] == root['itemId'] and not root.get('stageMarker')
         and isinstance(content, dict) and (content.get('__typename') == 'DraftIssue'
             or (content.get('__typename') == 'Issue'
@@ -215,7 +231,12 @@ def normalize(item, project, status_field, pending):
             required(value, 'id', str)
         required(required(value, 'field', dict), 'id', str)
     slug = task_slug(project['id'], identity)
+    database_id = item.get('fullDatabaseId')
+    if database_id is not None and (isinstance(database_id, bool) or not str(database_id).isdigit()):
+        raise ScanError('GitHub Project item has an invalid database identity')
     result = {'itemId': identity, 'taskSlug': slug, 'isArchived': archived,
+              'fullDatabaseId': database_id,
+              'itemURL': PROJECT_URL + '?pane=issue&itemId=' + str(database_id) if database_id is not None else None,
               'content': item['content'], 'fieldValues': nodes, 'issueAlias': None, 'parent': None,
               'stageMarker': None, 'requiresConversion': False, 'status': None,
               'action': 'new', 'skipReason': None, 'previous': pending.get(slug)}
@@ -336,7 +357,7 @@ def scan(*, pending=None):
     for item in items:
         if item['stageMarker']:
             if item['content']['__typename'] == 'DraftIssue':
-                item.update(draft_stage_linkage(item['stageMarker'], item['content']['body'], by_slug))
+                item.update(draft_stage_linkage(item['stageMarker'], item['content']['body'], by_slug, item['fieldValues']))
             else:
                 item.update(stage_linkage(item['stageMarker'], item['parent'], by_slug))
     resumes = [{'taskSlug': slug, 'previous': record, 'presentInProject': slug in by_slug,

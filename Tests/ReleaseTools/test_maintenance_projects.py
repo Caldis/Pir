@@ -168,6 +168,26 @@ class ProjectsTests(unittest.TestCase):
             stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:implementation -->\n{line}'
             self.assertEqual(self.scan([stage, root])['items'][0]['action'], 'blocked')
 
+    def test_draft_parent_text_field_cannot_conflict_with_body_and_item_url(self):
+        root, stage = item('root', 'DraftIssue'), item('stage', 'DraftIssue')
+        root['fullDatabaseId'] = '286166724'
+        slug = self.m.task_slug(metadata()['id'], 'root')
+        stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:review -->\nParent item: root'
+        parent = {'__typename': 'ProjectV2ItemFieldTextValue', 'id': 'PARENT_VALUE',
+                  'field': {'id': 'PARENT_FIELD', 'name': 'Parent item'}, 'text': 'foreign'}
+        stage['fieldValues'] = connection([parent])
+        self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'blocked')
+        parent['text'] = 'https://github.com/users/Caldis/projects/7?pane=issue&itemId=286166724'
+        result = self.scan([root, stage])
+        self.assertEqual(result['items'][1]['action'], 'stage')
+        self.assertEqual(result['items'][0]['fullDatabaseId'], '286166724')
+        self.assertEqual(result['items'][0]['itemURL'], parent['text'])
+        self.assertIsNone(result['items'][1]['itemURL'])
+        parent['text'] += ' | root'
+        self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'stage')
+        parent['text'] = parent['text'].replace(' | root', ' | wrong')
+        self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'blocked')
+
     def test_full_field_metadata_and_non_status_values_preserved(self):
         meta, task = metadata(), item()
         meta['fields']['nodes'].extend([
@@ -182,6 +202,12 @@ class ProjectsTests(unittest.TestCase):
         result = self.scan([task], meta=meta)
         self.assertEqual(result['fields'], meta['fields']['nodes'])
         self.assertEqual(result['items'][0]['fieldValues'], values)
+
+    def test_query_bounds_nested_connections_below_github_node_limit(self):
+        self.assertIn('items(first: 100', self.m.ITEMS_QUERY)
+        self.assertIn('fieldValues(first: 100)', self.m.ITEMS_QUERY)
+        for name in ('labels', 'users', 'reviewers', 'pullRequests'):
+            self.assertIn(name + '(first: 10)', self.m.ITEMS_QUERY)
 
     def test_native_field_values_have_field_identity_without_invented_value_id(self):
         task = item()
@@ -247,6 +273,15 @@ class ProjectsTests(unittest.TestCase):
             self.assertEqual(self.m.main(['--state-dir', directory]), 1)
             self.assertEqual(out.getvalue(), '')
             self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_nonzero_graphql_error_is_not_misreported_as_auth_failure(self):
+        response = subprocess.CompletedProcess([], 1, json.dumps({'errors': [{'type': 'MAX_NODE_LIMIT_EXCEEDED', 'message': 'secret-token'}]}), 'secret-token')
+        with patch.object(self.m.subprocess, 'run', return_value=response):
+            with self.assertRaises(self.m.ScanError) as failure:
+                self.m.graphql('query {}', {})
+        self.assertIn('GraphQL', str(failure.exception))
+        self.assertNotIn('authentication', str(failure.exception))
+        self.assertNotIn('secret-token', str(failure.exception))
 
     def test_graphql_partial_errors_timeout_and_stderr_never_leak(self):
         for completed in [subprocess.CompletedProcess([], 0, json.dumps({'data': {'user': {}}, 'errors': [{'message': 'secret-token'}]}), ''),
