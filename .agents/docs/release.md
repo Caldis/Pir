@@ -4,13 +4,11 @@
 
 ## 本地配置
 
-签名支持 macOS Keychain 中的 Developer ID Application 身份或 Xcode 云管理 Developer ID 导出, 公证使用 Keychain profile `notarytool`
+签名使用 macOS Keychain 中带有对应私钥的本地 Developer ID Application 身份, 公证使用 Keychain profile `notarytool`
 
 | 环境变量 | 用途 |
 | --- | --- |
-| `PIR_SIGN_IDENTITY` | 可选 Developer ID Application 证书名称或 SHA1; 留空时使用 Xcode 云签名导出 |
-| `PIR_TEAM_ID` | Xcode 云签名团队 ID, 本项目默认 N7Z52F27XK |
-| `PIR_DEVELOPMENT_IDENTITY` | 可选开发签名身份; 云导出前用于归档签名 |
+| `PIR_SIGN_IDENTITY` | 必填, 本地 Developer ID Application 签名身份的证书名称或 SHA1 |
 | `PIR_NOTARY_PROFILE` | 公证 Keychain profile, 默认 notarytool |
 | `PIR_VERSION` | 应用版本, 默认 Resources/Info.plist 当前值 |
 | `PIR_BUILD` | 唯一构建编号 |
@@ -20,7 +18,7 @@
 ## 步骤
 
 1. 执行 `scripts/check.sh`, 并完成图片、文本、热键与偏好设置交互验收
-2. 执行 `scripts/release.sh`, 按需通过 `PIR_SIGN_IDENTITY` 指定本地分发证书
+2. 执行 `PIR_SIGN_IDENTITY="Developer ID Application: BIAO CHEN (N7Z52F27XK)" scripts/release.sh`, 指定本地分发身份
 3. 脚本构建 Universal app、签名、提交公证、装订票据并验证 Gatekeeper
 4. 脚本生成 `dist/Pir-<version>-universal.dmg`, 验证磁盘镜像与 SHA256
 5. GitHub Release 使用上述最终镜像与校验文件, 官网下载指向 Releases
@@ -28,11 +26,12 @@
 
 ## 证书恢复
 
-`security find-identity -v -p codesigning` 仅列出可用身份. 缺少 Developer ID 身份时, 检查 Xcode Accounts 的账号与团队状态, 使用 Xcode 的 Developer ID 导出能力恢复分发证书. Apple Development 身份只适用于开发构建
+`security find-identity -v -p codesigning` 仅列出可用身份. 证书可见但身份不可用时, 检查同一 Keychain 中是否存在配对私钥、证书有效期与信任链; 按需导入包含私钥的证书备份, 再用 `codesign` 实际验证. Apple Development 身份只适用于开发构建
+
+本机签名材料位于 `~/Docs/ci-signing/keys/dev-id-app.p12`、`dev-id-app.key` 与 `dev-id-app.pem`, 配置记录位于 `~/Docs/ci-signing/github-macos-codesign.md`. 这些文件保留在仓库之外. 证书身份为 `Developer ID Application: BIAO CHEN (N7Z52F27XK)`, SHA1 为 `A23AFFD4C701B02874A7855F92E832D5D45707E2`. 身份未出现在钥匙串列表时, 先检查该本地备份与配对私钥, 再验证签名能力.
 
 公证 `Accepted` 之后才执行 `stapler staple`; 构建通过、已上传与公证通过分别记录
 
-云签名模式通过 `scripts/cloud-sign.sh` 导出签名后的应用, 分发私钥保留在 Apple 的签名服务. 磁盘镜像包含 Developer ID 签名应用并单独接受公证与票据装订; 使用本地分发身份时镜像另加签名
 
 ## 原生外观与链接 SDK
 
@@ -42,7 +41,7 @@
 
 ## Sparkle 更新资产
 
-更新界面、GitHub Release feed、独立更新签名与版本策略见 docs/updates.md. scripts/build.sh 嵌入 Sparkle.framework 并签名组件, cloud-sign.sh 与 release.sh 在根应用签名前使用相同发行身份重签组件
+更新界面、GitHub Release feed、独立更新签名与版本策略见 docs/updates.md. scripts/build.sh 嵌入 Sparkle.framework 并签名组件, release.sh 在根应用签名前使用相同发行身份重签组件
 
 Pir 的发行源为 Caldis/Pir. 发布后独立回读应用、镜像、更新 ZIP 与签名 feed, 更新安装结果记录于本文件
 
@@ -176,7 +175,6 @@ Limited Review: 桌面自动化对非激活浮窗 hover 和拖动的支持有限
 
 Limited Review: 桌面自动化对非激活浮窗 hover 的投递支持有限, 完整工具条与虚线过渡观感仍属有限人工覆盖. 实际应用证据覆盖透明图片渲染、文件网格和列表、会话恢复与真实升级; 像素、几何、命中和时序具备定向回归证据
 
-公证 CLI 的既有 notarytool profile 在本轮故障期间持续可用. 签名阶段曾出现 missing Xcode-Username / No Accounts, 账户认证恢复后同一命令行云导出成功. 本地代码签名身份枚举与云签名能力分别记录, 公证凭据与签名认证分别验证
 
 证据、公开下载、日志与本轮隔离会话位于 ~/.config/pir/migration/release-verification/0.1.7/. 预览会话与升级会话分别归档, 用户偏好与既有 Keychain 密钥保留, 已安装正式版恢复常规运行
 

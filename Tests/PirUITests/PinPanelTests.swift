@@ -5,6 +5,12 @@ import PirCore
 
 private final class CursorProbeWindow: NSWindow {
     var onResize: (() -> Void)?
+    var resizeEvents: [NSEvent] = []
+
+    override func nextEvent(matching mask: NSEvent.EventTypeMask) -> NSEvent? {
+        guard !resizeEvents.isEmpty else { return super.nextEvent(matching: mask) }
+        return resizeEvents.removeFirst()
+    }
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
         onResize?()
         super.setFrame(frameRect, display: flag)
@@ -188,8 +194,8 @@ final class PinPanelTests: XCTestCase {
             XCTAssertTrue(NSCursor.current === NSCursor.resizeLeftRight)
         }
         NSCursor.arrow.set()
-        NSApp.postEvent(up, atStart: true)
-        NSApp.postEvent(dragged, atStart: true)
+        // AppKit may transform posted synthetic coordinates during window presentation.
+        window.resizeEvents = [dragged, up]
         surface.mouseDown(with: down)
         XCTAssertTrue(seen)
         XCTAssertEqual(window.frame.width, 320, accuracy: 1)
