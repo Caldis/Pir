@@ -170,6 +170,16 @@ class ProjectsTests(unittest.TestCase):
             stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:implementation -->\n{line}'
             self.assertEqual(self.scan([stage, root])['items'][0]['action'], 'blocked')
 
+    def test_draft_stage_can_link_pir_pull_request_root_but_rejects_foreign_pr(self):
+        root, stage = item('root', 'PullRequest'), item('stage', 'DraftIssue')
+        slug = self.m.task_slug(metadata()['id'], 'root')
+        stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:review -->\nParent item: root'
+        stage['fieldValues'] = connection([{'__typename': 'ProjectV2ItemFieldTextValue',
+            'id': 'PARENT_VALUE', 'field': {'id': 'PARENT_FIELD', 'name': 'Parent item'}, 'text': 'root'}])
+        self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'stage')
+        root['content']['repository']['nameWithOwner'] = 'Caldis/Mos'
+        self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'blocked')
+
     def test_draft_parent_text_field_cannot_conflict_with_body_and_item_url(self):
         root, stage = item('root', 'DraftIssue'), item('stage', 'DraftIssue')
         root['fullDatabaseId'] = '286166724'

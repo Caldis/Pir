@@ -192,7 +192,7 @@ def draft_stage_linkage(marker, body, roots, values):
         and len(linked) == 1 and all(link in valid_links for link in linked)
         and parents[0] == root['itemId'] and not root.get('stageMarker')
         and isinstance(content, dict) and (content.get('__typename') == 'DraftIssue'
-            or (content.get('__typename') == 'Issue'
+            or (content.get('__typename') in ('Issue', 'PullRequest')
                 and content.get('repository', {}).get('nameWithOwner', '').casefold() == REPO.casefold())))
     return {'action': 'stage' if verified else 'blocked',
             'skipReason': 'stage-child' if verified else 'stage-linkage-unverified',
