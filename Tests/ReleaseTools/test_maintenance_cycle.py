@@ -126,3 +126,7 @@ class MaintenanceTests(unittest.TestCase):
         with self.assertRaises(self.m.Busy):
             self.m.upsert_comment(api, 39, 'triage', 'hello', 'Caldis')
         self.assertEqual(writes, [])
+
+    def test_changed_input_on_blocked_merged_release_resumes_existing_work(self):
+        previous = {'phase': 'blocked', 'resumePhase': 'merged', 'pr': 40, 'fingerprint': 'old'}
+        self.assertEqual(self.m.action(previous, 'new'), 'resume')

@@ -3,10 +3,12 @@
 import argparse
 import base64
 import hashlib
+import os
 import pathlib
 import plistlib
 import re
 import runpy
+import shutil
 import subprocess
 import tempfile
 import urllib.request
@@ -14,6 +16,29 @@ import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 NS = '{http://www.andymatuschak.org/xml-namespaces/sparkle}'
+
+
+def resolve_openssl():
+    override = os.environ.get('PIR_OPENSSL')
+    candidates = [override] if override else [
+        '/opt/homebrew/opt/openssl@3/bin/openssl',
+        '/usr/local/opt/openssl@3/bin/openssl',
+        shutil.which('openssl')]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = pathlib.Path(candidate).expanduser()
+        if not path.is_absolute():
+            path = pathlib.Path(shutil.which(str(path)) or path).resolve()
+        if not path.is_file():
+            continue
+        try:
+            result = subprocess.run([str(path), 'version'], capture_output=True, text=True, timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0 and result.stdout.startswith('OpenSSL 3.'):
+            return str(path.resolve())
+    raise RuntimeError('OpenSSL 3 is required for Ed25519 and legacy PKCS12; install openssl@3 with Homebrew or set PIR_OPENSSL to its executable path')
 
 
 def verify_hashes(directory, names):
@@ -37,7 +62,7 @@ def verify_signature(payload, signature, public):
         (folder/'key').write_bytes(bytes.fromhex('302a300506032b6570032100') + public)
         (folder/'payload').write_bytes(payload)
         (folder/'signature').write_bytes(signature)
-        result = subprocess.run(['openssl', 'pkeyutl', '-verify', '-pubin', '-keyform', 'DER', '-inkey', str(folder/'key'), '-rawin', '-in', str(folder/'payload'), '-sigfile', str(folder/'signature')], capture_output=True)
+        result = subprocess.run([resolve_openssl(), 'pkeyutl', '-verify', '-pubin', '-keyform', 'DER', '-inkey', str(folder/'key'), '-rawin', '-in', str(folder/'payload'), '-sigfile', str(folder/'signature')], capture_output=True)
         if result.returncode:
             raise RuntimeError('Independent Ed25519 verification failed')
 

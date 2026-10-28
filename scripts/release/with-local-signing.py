@@ -5,9 +5,9 @@ import datetime
 import json
 import os
 import pathlib
+import runpy
 import secrets
 import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -66,11 +66,7 @@ def local_keychain(keys, openssl, execute=run, recovery_dir=None):
 
 
 def main():
-    openssl = '/opt/homebrew/opt/openssl@3/bin/openssl'
-    if not pathlib.Path(openssl).is_file():
-        openssl = shutil.which('openssl') or ''
-    if not openssl or not run([openssl, 'version']).startswith('OpenSSL 3.'):
-        raise RuntimeError('OpenSSL 3 is required for legacy PKCS12 import')
+    openssl = runpy.run_path(str(ROOT/'scripts/release/verify-public.py'))['resolve_openssl']()
     for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(name, lambda number, frame: sys.exit(128 + number))
     environment = dict(os.environ)

@@ -51,12 +51,13 @@ class ReleaseHelpersTests(unittest.TestCase):
 
     def test_real_ed25519_rejects_tampering(self):
         helper = self.helper('verify-public.py')
+        openssl = helper['resolve_openssl']()
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
-            subprocess.run(['openssl', 'genpkey', '-algorithm', 'ED25519', '-out', str(root/'key')], check=True, capture_output=True)
-            public = subprocess.check_output(['openssl', 'pkey', '-in', str(root/'key'), '-pubout', '-outform', 'DER'])[-32:]
+            subprocess.run([openssl, 'genpkey', '-algorithm', 'ED25519', '-out', str(root/'key')], check=True, capture_output=True)
+            public = subprocess.check_output([openssl, 'pkey', '-in', str(root/'key'), '-pubout', '-outform', 'DER'])[-32:]
             (root/'payload').write_bytes(b'original')
-            signature = subprocess.check_output(['openssl', 'pkeyutl', '-sign', '-inkey', str(root/'key'), '-rawin', '-in', str(root/'payload')])
+            signature = subprocess.check_output([openssl, 'pkeyutl', '-sign', '-inkey', str(root/'key'), '-rawin', '-in', str(root/'payload')])
             helper['verify_signature'](b'original', signature, public)
             with self.assertRaises((RuntimeError, subprocess.CalledProcessError)):
                 helper['verify_signature'](b'tampered', signature, public)
@@ -118,13 +119,14 @@ class ReleaseHelpersTests(unittest.TestCase):
         helper = self.helper('verify-public.py')
         metadata = runpy.run_path(str(ROOT/'scripts/version-metadata.py'))['release_metadata']
         ns = helper['NS']
+        openssl = helper['resolve_openssl']()
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
-            subprocess.run(['openssl', 'genpkey', '-algorithm', 'ED25519', '-out', str(root/'key')], check=True, capture_output=True)
-            public = subprocess.check_output(['openssl', 'pkey', '-in', str(root/'key'), '-pubout', '-outform', 'DER'])[-32:]
+            subprocess.run([openssl, 'genpkey', '-algorithm', 'ED25519', '-out', str(root/'key')], check=True, capture_output=True)
+            public = subprocess.check_output([openssl, 'pkey', '-in', str(root/'key'), '-pubout', '-outform', 'DER'])[-32:]
             def sign(payload):
                 (root/'payload').write_bytes(payload)
-                return base64.b64encode(subprocess.check_output(['openssl', 'pkeyutl', '-sign', '-inkey', str(root/'key'), '-rawin', '-in', str(root/'payload')])).decode()
+                return base64.b64encode(subprocess.check_output([openssl, 'pkeyutl', '-sign', '-inkey', str(root/'key'), '-rawin', '-in', str(root/'payload')])).decode()
             for channel in ('stable', 'beta'):
                 names = metadata('0.2.0', '20261028.2', channel)
                 archive = names['archive']
@@ -179,3 +181,21 @@ class ReleaseHelpersTests(unittest.TestCase):
             with helper['local_keychain'](root, 'openssl', execute, recovery_dir=recovery):
                 self.assertEqual(len(list(recovery.glob('*.json'))), 1)
             self.assertEqual(list(recovery.glob('*.json')), [])
+
+    def test_explicit_openssl3_ignores_old_system_path_and_keeps_crypto_checks(self):
+        import os
+        from unittest import mock
+        helper = self.helper('verify-public.py')
+        self.assertTrue(callable(helper.get('resolve_openssl')), 'OpenSSL 3 resolver is missing')
+        actual = helper['resolve_openssl']()
+        self.assertTrue(pathlib.Path(actual).is_absolute())
+        with tempfile.TemporaryDirectory() as directory:
+            old = pathlib.Path(directory)/'openssl'
+            old.write_text('#!/bin/sh\necho "LibreSSL 3.3.6"\n')
+            old.chmod(0o755)
+            with mock.patch.dict(os.environ, {'PATH': directory, 'PIR_OPENSSL': actual}):
+                self.assertEqual(helper['resolve_openssl'](), actual)
+                self.test_real_ed25519_rejects_tampering()
+            with mock.patch.dict(os.environ, {'PATH': directory, 'PIR_OPENSSL': str(old)}):
+                with self.assertRaisesRegex(RuntimeError, 'OpenSSL 3.*PIR_OPENSSL'):
+                    helper['resolve_openssl']()

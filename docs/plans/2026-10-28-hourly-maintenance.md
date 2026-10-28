@@ -19,3 +19,5 @@
 - Release helpers tested real disposable-keychain loading and one-shot Aqua public-key lookup without creating a release. Existing 0.1.9 public fixtures passed independent hash/signature and ZIP/DMG trust verification.
 - Keychain cleanup failure retains a private, non-secret recovery snapshot; successful cleanup removes it. Signal cleanup terminates the entire child process group.
 - Skill schema validator passed. Hourly scheduling is intentionally registered only when the user's new Pir chat starts the skill; this agentic chat has no maintenance heartbeat.
+- Isolated full helper smoke also passed: existing notarized 0.1.9 app plus previous source feed produced signed/independently verified temporary update assets via the one-shot Aqua helper; original local and remote tracked files and remote job inventory were unchanged.
+- First PR CI exposed runner system OpenSSL lacking `-rawin`; the helpers and crypto fixtures now resolve a verified OpenSSL 3 executable instead of depending on PATH.

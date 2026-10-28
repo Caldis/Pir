@@ -128,7 +128,10 @@ def fingerprint(issue, comments, viewer):
 def action(previous, digest):
     if not previous: return 'new'
     if previous.get('phase') not in ('verified', 'blocked'): return 'resume'
-    if previous.get('fingerprint') != digest: return 'changed'
+    if previous.get('fingerprint') != digest:
+        if previous.get('phase') == 'blocked' and (previous.get('pr') or previous.get('release')):
+            return 'resume'
+        return 'changed'
     return 'unchanged' if previous['phase'] == 'verified' else 'blocked'
 
 
