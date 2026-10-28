@@ -130,3 +130,11 @@ Pir 的基础热键功能使用系统组合键注册与应用窗口内录制. �
 文件浮窗采用公开 URL 与拖放 API, 右键仅提供移除引用. 系统公开接口缺少完整 Finder 右键菜单, 当前产品范围保留轻量文件暂存交互
 
 项目级文档承载本项目可复用经验, 本轮采用现有脚本与维护索引. 跨项目复用需求明确后再提取独立 skill, 技能评测依用户当轮授权执行
+
+## 2026-10-28 本地开发与签名排查
+
+Mac mini 开发目录为 `~/Code/Pir`. Xcode 26.6 / Swift 6.3.3 / SDK 26.5 已通过 Universal 构建, `scripts/dev.sh` 启动后更新页显示 0.1.9 / 20261028.1. `scripts/check.sh` 通过 128 项 Swift 测试、6 项 Python 发布工具测试、本地化、网站和脚本检查. 缩放光标测试使用隔离的合成事件队列, 保留原有精确尺寸与光标断言, 避免 AppKit 在真实队列中转换合成坐标.
+
+Developer ID 证书、配对私钥与 P12 一直位于 Mac mini 的 `~/Docs/ci-signing/keys/`, 说明位于 `~/Docs/ci-signing/github-macos-codesign.md`. 单独看到证书而 `security find-identity` 未列出可用身份, 应继续检查配对私钥与钥匙串加载状态. 本轮已将配对材料导入 login Keychain; 发行实际使用临时钥匙串加载同一套本地材料, 完成后恢复搜索列表并清理临时钥匙串. OpenSSL 3 打包给 macOS 导入的临时 P12 使用 `-legacy`, 随机口令不写入仓库或日志. Developer ID 签名、应用与 DMG 公证均已验证.
+
+Pir 的 Sparkle 更新密钥与 Developer ID 分开管理. 原有账号 `me.caldis.pir` 位于 SSH 主机 `macbook` 的 login Keychain, 公钥与本仓库 Info.plist 匹配. 当前 Mac mini 未配置这把更新密钥, 不应据此认定原密钥不存在. 普通 SSH 调用可能被系统拒绝访问钥匙串, 本轮在 MacBook 的 Aqua 用户会话运行原有 Sparkle 工具, 用独立临时目录处理本机已公证应用, 私钥与原项目工作区保留原处. 后续继续使用该机器签名, 或在明确迁移密钥后核对两机公钥; 不得重新生成或替换发布公钥.

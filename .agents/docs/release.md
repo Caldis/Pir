@@ -198,6 +198,6 @@ Limited Review: 桌面自动化对非激活浮窗 hover 的投递支持有限, �
 
 Limited Review: 桌面工具截图覆盖应用窗口, 系统菜单栏的整体视觉对比仍属有限人工覆盖. 回归测试与打包后探针验证实际 1x/2x representation 选择, 两份 PNG 保持原始像素
 
-签名证书、私钥和 P12 的实时位置为 SSH 主机 macmini 的 /Users/caldis/Docs/ci-signing/keys/. 本轮临时钥匙串签名使用原有文件, 结束后恢复钥匙串搜索列表并清理临时材料. 原有云导出权限错误仅对应该云签名路径
+签名证书、私钥和 P12 的实时位置为 SSH 主机 macmini 的 /Users/caldis/Docs/ci-signing/keys/. 本轮临时钥匙串签名使用原有文件, 结束后恢复钥匙串搜索列表并清理临时材料.
 
 发行证据、独立公开下载、日志与测试会话归档位于 ~/.config/pir/migration/release-verification/0.1.8/. 已安装正式版恢复常规运行, 用户偏好与原有凭据保留

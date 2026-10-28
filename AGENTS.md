@@ -53,6 +53,8 @@
 - 本地构建: `scripts/build.sh`, 产物为 `dist/Pir.app`; 单独编译和测试使用 `scripts/swift.sh build|test`, 保留当前 SDK 链接信息
 - 开发启动: `scripts/dev.sh`
 - 发布准备: 阅读 `.agents/docs/release.md`, 使用 `scripts/release.sh`
+- 本地签名材料固定检查顺序: 先读 `~/Docs/ci-signing/github-macos-codesign.md`, 检查 `~/Docs/ci-signing/keys/` 下的证书与配对私钥, 再查看钥匙串身份并实际试签. `security find-identity` 未列出身份只说明当前钥匙串状态, 不足以判定本机没有私钥
+- Developer ID 材料位于 Mac mini 的上述目录, 身份为 `Developer ID Application: BIAO CHEN (N7Z52F27XK)`. Pir 的 Sparkle 更新密钥独立保存在 SSH 主机 `macbook` 的登录钥匙串, account 为 `me.caldis.pir`; 先用 `generate_keys --account me.caldis.pir -p` 核对公钥, 不得用 Mos 密钥替代或直接重建密钥. SSH 会话的钥匙串访问失败与密钥不存在分别判断
 - 功能完成需要单测与应用交互证据; 构建成功只说明编译与打包成功
 - 签名、公证与 GitHub 发布分别回读; 公证要求 Apple Accepted、stapler 与 Gatekeeper 验证
 - 网站源文件在 `website/`, GitHub Pages 使用专用 workflow 发布

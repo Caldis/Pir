@@ -32,13 +32,13 @@ N 从 1 开始. 本地构建从现有 dist/Pir.app 读取同日序号并递增, 
 
 ## 更新签名
 
-Pir 使用独立的 Ed25519 密钥, Keychain account 为 `me.caldis.pir`. 公钥保存在 Resources/Info.plist 的 SUPublicEDKey. 私钥保存在 login Keychain
+Pir 使用独立的 Ed25519 密钥, Keychain account 为 `me.caldis.pir`. 公钥保存在 Resources/Info.plist 的 SUPublicEDKey. 原有私钥保存在 SSH 主机 `macbook` 的 login Keychain; Mac mini 不持有该密钥
 
 Info.plist 启用 SURequireSignedFeed 和 SUVerifyUpdateBeforeExtraction. Sparkle 验证 feed、ZIP 签名与应用签名, 安装要求用户确认
 
 `scripts/release/configure-update-key.sh` 创建或读取 Pir 的 Keychain 密钥并更新公钥配置. `scripts/sparkle-tool.sh` 从 SwiftPM artifact 定位官方工具, PIR_SPARKLE_TOOLS 可指定官方发行包的 bin 目录
 
-Pir 的 Keychain 密钥与公钥配置已完成. 本机使用该 Keychain account 的 ZIP fixture 与 feed 签名及独立验签均已通过, 一次性隔离密钥的同项检查也已通过, 临时密钥在验证后清理. 发行工具再次访问 Keychain 时, macOS 仍可能要求授权
+Pir 的 Keychain 密钥与公钥配置已完成. 本机使用该 Keychain account 的 ZIP fixture 与 feed 签名及独立验签均已通过, 一次性隔离密钥的同项检查也已通过, 临时密钥在验证后清理. 发行工具再次访问 Keychain 时, macOS 仍可能要求授权. 普通 SSH 会话可能返回 Keychain access blocked; 使用该机器登录用户的 Aqua 会话运行原有工具, 并核对公钥是否与 Info.plist 一致. 临时工作目录用于签名资产, 私钥保留在原机器, 原项目工作区保持不变
 
 ## 本地准备
 
