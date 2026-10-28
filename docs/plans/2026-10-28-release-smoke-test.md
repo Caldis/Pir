@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Verify development, Universal compilation, application launch, Git push, and a signed Pir 0.1.9 release from ~/Code/Pir.
+**Goal:** Verify development, Universal compilation, application launch, Git push, and a signed Pir 0.1.9 release from 项目检出目录.
 
 **Architecture:** Keep application behavior unchanged. Add a small user instruction, bump version metadata, and use the existing Apple signing, notarization, and Sparkle release scripts. Preserve the existing Sparkle public key and user data.
 
@@ -22,7 +22,7 @@
 
 ### Task 3: Build and publish
 
-- Run `PIR_SIGN_IDENTITY="Developer ID Application: BIAO CHEN (N7Z52F27XK)" PIR_VERSION=0.1.9 PIR_BUILD=20261028.1 scripts/release.sh`.
+- Run `PIR_VERSION=0.1.9 PIR_BUILD=20261028.1 python3 scripts/release/with-local-signing.py`.
 - Require Developer ID signing, Apple Accepted for app and DMG, stapler, Gatekeeper, and Universal architecture verification.
 - Prepare Sparkle assets with `scripts/release/prepare-update.sh`; require the existing Keychain private key to match the configured public key.
 - Commit the reviewed change and push main; create tag 0.1.9 and a GitHub release with DMG, ZIP, and SHA256SUMS.

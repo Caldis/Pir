@@ -32,7 +32,7 @@ N 从 1 开始. 本地构建从现有 dist/Pir.app 读取同日序号并递增, 
 
 ## 更新签名
 
-Pir 使用独立的 Ed25519 密钥, Keychain account 为 `me.caldis.pir`. 公钥保存在 Resources/Info.plist 的 SUPublicEDKey. 原有私钥保存在 SSH 主机 `macbook` 的 login Keychain; Mac mini 不持有该密钥
+Pir 使用独立的 Ed25519 密钥, Keychain account 为 `${PIR_SPARKLE_ACCOUNT}`. 公钥保存在 Resources/Info.plist 的 SUPublicEDKey. 原有私钥保存在 更新签名主机 `${PIR_SPARKLE_HOST}` 的 login Keychain; 构建主机 不持有该密钥
 
 Info.plist 启用 SURequireSignedFeed 和 SUVerifyUpdateBeforeExtraction. Sparkle 验证 feed、ZIP 签名与应用签名, 安装要求用户确认
 

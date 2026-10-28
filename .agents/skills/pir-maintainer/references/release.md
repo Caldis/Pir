@@ -1,8 +1,10 @@
 # Release gates and commands
 
-Read `.agents/docs/release.md` and `docs/updates.md` for the maintained contract. The helpers below codify the tested local-keychain and MacBook Aqua paths; they do not replace an agent's investigation or actual application verification.
+Read `.agents/docs/release.md` and `docs/updates.md` for the maintained contract. The helpers below codify the tested local-keychain and 更新签名主机 Aqua paths; they do not replace an agent's investigation or actual application verification.
 
 ## Preflight and source
+
+Read [local-environment.md](local-environment.md) for machine setup. Use `python3 scripts/local-config.py init --json` when settings are absent, then `check --json --require FIELD ...` for only the selected stage’s required fields. The initializer never invents unresolved settings; ask once for missing/ambiguous owner input and continue unrelated issue work. Do not load the file with shell source.
 
 Run from the intended clean checkout, with a current maintenance lease. Capture commands/results under `dist/maintenance/<run-id>/`. Check `git status`, remote `Caldis/Pir`, GitHub authentication, current main/PR/checks, existing tags/releases and the signed appcast before allocating a version. Require the current head's `Check` workflow success, with its head SHA matching the PR after the final push. If current-head CI is missing, await or explicitly rerun the appropriate workflow for that exact head; if it failed, fix it on the PR before merging. For an already merged PR, validate the selected exact release source and its Check run instead of creating a duplicate fix. Merge with `--match-head-commit` and read back its merge SHA.
 
@@ -10,16 +12,16 @@ Use one next patch version (`X.Y.Z`) and a build newer than **all** entries in `
 
 Record the merge/build SHA. If main advanced, inspect every new commit before selecting the release revision; include only reviewed/tested changes. Build from a clean checkout of that recorded revision. Repository/worktree paths can vary; do not assume an agent runs on a machine with either key loaded.
 
-## Sign and notarize on Mac mini
+## Sign and notarize on the configured build host
 
 ```bash
 PIR_VERSION="$PIR_VERSION" PIR_BUILD="$PIR_BUILD" \
   python3 scripts/release/with-local-signing.py
 ```
 
-This invokes existing `scripts/release.sh`: checks, Universal build, Developer ID signing, app notarization/stapling/Gatekeeper, signed DMG notarization/stapling and checksum. Default identity SHA1 is the existing BIAO CHEN certificate; it loads paired files from `~/Docs/ci-signing/keys/` into a disposable keychain and restores the original search list on exit. Keep the known backup in place. A missing identity in `security find-identity` is not proof that these files or their private key are absent.
+This invokes existing `scripts/release.sh`: checks, Universal build, Developer ID signing, app notarization/stapling/Gatekeeper, signed DMG notarization/stapling and checksum. The identity and paired-file directory are resolved through `scripts/local-config.py` and the existing private local.env; it loads the configured Developer ID files into a disposable keychain and restores the original search list on exit. Keep the known backup in place. A missing identity in `security find-identity` is not proof that these files or their private key are absent.
 
-Require **Accepted** in both `dist/notarization.json` and `dist/dmg-notarization.json`; codesign, stapler and Gatekeeper must pass. A submitted notarization request is unfinished. Do not start multiple releases concurrently: the keychain search list is shared per macOS user. Catchable failures clean up automatically; after a machine crash inspect `~/.config/pir/maintenance/signing/pir-signing-*.json`: it records the original search list, created keychain path, PID and timestamp, without passwords or key material. Confirm the old process is no longer active, restore exactly `originalKeychains`, then delete only its recorded temporary keychain before resuming. Never delete unrelated keychains.
+Require **Accepted** in both `dist/notarization.json` and `dist/dmg-notarization.json`; codesign, stapler and Gatekeeper must pass. A submitted notarization request is unfinished. Do not start multiple releases concurrently: the keychain search list is shared per macOS user. Catchable failures clean up automatically; after a machine crash inspect `signing/pir-signing-*.json` under the configured `PIR_EVIDENCE_DIR` (also check the legacy `~/.config/pir/maintenance/signing/` location when recovering a pre-configuration run): it records the original search list, created keychain path, PID and timestamp, without passwords or key material. Confirm the old process is no longer active, restore exactly `originalKeychains`, then delete only its recorded temporary keychain before resuming. Never delete unrelated keychains.
 
 ## Prepare Sparkle with the original key
 
@@ -31,9 +33,9 @@ python3 scripts/release/prepare-on-macbook.py \
   --app dist/Pir.app --notes "$PIR_NOTES_HTML" --timeout 300
 ```
 
-The first command compares the **public** key; the second signs only in a private temporary staging directory on SSH host `macbook`. Existing official tools are read from `~/Code/Pir/.build`. One-shot Aqua launchd jobs use `RunAtLoad=true`, `KeepAlive=false`; don't substitute `launchctl submit`, which may rerun a completed task. No original remote project file or private key is exported/modified. Returned ZIP/feed are independently verified before local `release/appcast.xml` is updated.
+The first command compares the **public** key; the second signs only in a private temporary staging directory on the configured update-signing SSH host. Existing official tools are read from `${PIR_SPARKLE_PROJECT_DIR}/.build`. One-shot Aqua launchd jobs use `RunAtLoad=true`, `KeepAlive=false`; don't substitute `launchctl submit`, which may rerun a completed task. No original remote project file or private key is exported/modified. Returned ZIP/feed are independently verified before local `release/appcast.xml` is updated.
 
-If normal SSH reports Keychain access blocked, diagnose execution session/access. Do not regenerate keys, change `SUPublicEDKey` or reuse Mos keys. If MacBook is offline, checkpoint `blocked` with this prerequisite and retain already notarized assets for resumption; don't publish an unsigned or incomplete substitute. A completed one-shot task can be retried safely only after reading its result and local returned artifacts.
+If normal SSH reports Keychain access blocked, diagnose execution session/access. Do not regenerate keys, change `SUPublicEDKey` or reuse Mos keys. If the configured update-signing host is offline, checkpoint `blocked` with this prerequisite and retain already notarized assets for resumption; don't publish an unsigned or incomplete substitute. A completed one-shot task can be retried safely only after reading its result and local returned artifacts.
 
 Combine the two fixed release-asset hashes into `dist/SHA256SUMS`, with the **bare** DMG and ZIP names (no `updates/` path). Compare app version/build and signer with the planned values, and save the `prepared` checkpoint.
 

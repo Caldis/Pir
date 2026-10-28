@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run a release command with existing local certificate/key in a disposable keychain."""
+import argparse
 import contextlib
 import datetime
 import json
@@ -14,7 +15,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-IDENTITY = 'A23AFFD4C701B02874A7855F92E832D5D45707E2'
+CONFIG = runpy.run_path(str(ROOT/'scripts/local-config.py'))
 
 
 def run(command, **kwargs):
@@ -29,7 +30,7 @@ def run(command, **kwargs):
 def local_keychain(keys, openssl, execute=run, recovery_dir=None):
     for name in ('dev-id-app.key', 'dev-id-app.pem'):
         if not (keys / name).is_file():
-            raise RuntimeError(f'Existing signing material unavailable: {keys / name}; inspect ~/Docs/ci-signing/github-macos-codesign.md')
+            raise RuntimeError('Existing signing material unavailable; inspect PIR_SIGNING_DIR and PIR_SIGNING_GUIDE')
     original = shlex.split(execute(['security', 'list-keychains', '-d', 'user']))
     with tempfile.TemporaryDirectory(prefix='pir-signing-') as directory:
         folder = pathlib.Path(directory)
@@ -66,15 +67,28 @@ def local_keychain(keys, openssl, execute=run, recovery_dir=None):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--config', type=pathlib.Path)
+    parser.add_argument('--signing-dir')
+    parser.add_argument('--identity')
+    parser.add_argument('--evidence-dir')
+    parser.add_argument('command', nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    settings = CONFIG['load_config'](args.config, overrides={'PIR_SIGNING_DIR': args.signing_dir, 'PIR_SIGN_IDENTITY': args.identity, 'PIR_EVIDENCE_DIR': args.evidence_dir})
+    CONFIG['require'](settings, 'PIR_SIGNING_DIR', 'PIR_SIGN_IDENTITY')
     openssl = runpy.run_path(str(ROOT/'scripts/release/verify-public.py'))['resolve_openssl']()
     for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(name, lambda number, frame: sys.exit(128 + number))
     environment = dict(os.environ)
-    environment.setdefault('PIR_SIGN_IDENTITY', IDENTITY)
-    command = sys.argv[1:] or [str(ROOT/'scripts/release.sh')]
+    keys = pathlib.Path(settings['PIR_SIGNING_DIR'])
+    identity = CONFIG['certificate_identity'](keys, openssl, expected=settings['PIR_SIGN_IDENTITY'])
+    # Use the verified paired certificate, avoiding name matches in other keychains.
+    environment['PIR_SIGN_IDENTITY'] = identity
+    command = args.command or [str(ROOT/'scripts/release.sh')]
     if command[:1] == ['--']:
         command = command[1:]
-    with local_keychain(pathlib.Path.home()/'Docs/ci-signing/keys', openssl):
+    recovery = pathlib.Path(settings['PIR_EVIDENCE_DIR'])/'signing' if settings.get('PIR_EVIDENCE_DIR') else None
+    with local_keychain(keys, openssl, recovery_dir=recovery):
         return run_command(command, environment)
 
 
@@ -102,5 +116,5 @@ def run_command(command, environment):
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except RuntimeError as error:
+    except (RuntimeError, ValueError) as error:
         sys.exit(str(error))

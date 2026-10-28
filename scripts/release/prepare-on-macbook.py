@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare Sparkle assets using the existing MacBook login key in a one-shot Aqua job."""
+"""Prepare Sparkle assets using the configured existing login key in a one-shot Aqua job."""
 import argparse
 import base64
 import pathlib
@@ -14,6 +14,7 @@ import time
 import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+CONFIG = runpy.run_path(str(ROOT/'scripts/local-config.py'))
 
 
 def job_files(label, directory, command):
@@ -26,15 +27,33 @@ def job_files(label, directory, command):
     return plistlib.dumps(spec), script
 
 
+def stage_inputs(stage):
+    for name in ('scripts/local-config.py', 'scripts/sparkle-tool.sh', 'scripts/version-metadata.py', 'scripts/release/prepare-update.sh', 'scripts/release/update-feed.py', 'release/appcast.xml'):
+        destination = stage/name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT/name, destination)
+
+
+def update_command(folder, channel, account):
+    return ['/usr/bin/env', 'PIR_LOCAL_CONFIG=-', 'PIR_SPARKLE_ACCOUNT=' + account, '/bin/bash', str(folder/'scripts/release/prepare-update.sh'), str(folder/'Pir.app'), channel, str(folder/'notes.html')]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--app', type=pathlib.Path)
     parser.add_argument('--notes', type=pathlib.Path)
     parser.add_argument('--channel', choices=['stable', 'beta'], default='stable')
-    parser.add_argument('--host', default='macbook')
+    parser.add_argument('--host')
+    parser.add_argument('--config', type=pathlib.Path)
+    parser.add_argument('--project-dir')
+    parser.add_argument('--account')
     parser.add_argument('--timeout', type=float, default=300)
     parser.add_argument('--check-key', action='store_true', help='Only read and compare existing public key in Aqua')
     args = parser.parse_args()
+    settings = CONFIG['load_config'](args.config, overrides={'PIR_SPARKLE_HOST': args.host, 'PIR_SPARKLE_PROJECT_DIR': args.project_dir, 'PIR_SPARKLE_ACCOUNT': args.account})
+    CONFIG['require'](settings, 'PIR_SPARKLE_HOST', 'PIR_SPARKLE_PROJECT_DIR', 'PIR_SPARKLE_ACCOUNT')
+    args.host = settings['PIR_SPARKLE_HOST']
+    account = settings['PIR_SPARKLE_ACCOUNT']
     if args.timeout <= 0 or args.host.startswith('-'):
         parser.error('Positive timeout and SSH host are required')
     if not args.check_key and (not args.app or not args.app.is_dir() or not args.notes or not args.notes.is_file()):
@@ -50,16 +69,13 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix='pir-prepare-') as temporary:
             stage = pathlib.Path(temporary)
-            for name in ('scripts/sparkle-tool.sh', 'scripts/version-metadata.py', 'scripts/release/prepare-update.sh', 'scripts/release/update-feed.py', 'release/appcast.xml'):
-                destination = stage/name
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ROOT/name, destination)
+            stage_inputs(stage)
             if args.check_key:
-                command = [str(folder/'scripts/sparkle-tool.sh'), 'generate_keys', '--account', 'me.caldis.pir', '-p']
+                command = [str(folder/'scripts/sparkle-tool.sh'), 'generate_keys', '--account', account, '-p']
             else:
                 subprocess.run(['ditto', str(args.app.resolve()), str(stage/'Pir.app')], check=True)
                 shutil.copy2(args.notes, stage/'notes.html')
-                command = ['/bin/bash', str(folder/'scripts/release/prepare-update.sh'), str(folder/'Pir.app'), args.channel, str(folder/'notes.html')]
+                command = update_command(folder, args.channel, account)
             spec, script = job_files(label, folder, command)
             (stage/'job.plist').write_bytes(spec)
             (stage/'job.sh').write_text(script)
@@ -68,7 +84,10 @@ def main():
                 subprocess.run(['tar', '-cf', '-', '-C', str(stage), '.'], stdout=archive, check=True)
                 archive.seek(0)
                 subprocess.run(['ssh', '-o', 'BatchMode=yes', args.host, shlex.join(['tar', '-xf', '-', '-C', str(folder)])], stdin=archive, check=True, timeout=args.timeout)
-            remote('ln', '-s', str(pathlib.Path(remote_home)/'Code/Pir/.build'), str(folder/'.build'))
+            project = settings['PIR_SPARKLE_PROJECT_DIR']
+            if project.startswith('~/'):
+                project = str(pathlib.Path(remote_home)/project[2:])
+            remote('ln', '-s', str(pathlib.Path(project)/'.build'), str(folder/'.build'))
             remote('launchctl', 'bootstrap', f'gui/{uid}', str(folder/'job.plist'))
             deadline = time.monotonic() + args.timeout
             while True:
@@ -84,8 +103,8 @@ def main():
             if args.check_key:
                 expected = plistlib.loads((ROOT/'Resources/Info.plist').read_bytes())['SUPublicEDKey']
                 if log.strip() != expected:
-                    raise ValueError('MacBook account public key differs from Pir application')
-                print('Existing me.caldis.pir public key matches Pir; one-shot Aqua job succeeded')
+                    raise ValueError('Configured account public key differs from Pir application')
+                print('Existing configured public key matches Pir; one-shot Aqua job succeeded')
                 return
             output = stage/'output'
             output.mkdir()
@@ -112,4 +131,7 @@ def main():
 if __name__ == '__main__':
     for name in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(name, lambda number, frame: (_ for _ in ()).throw(SystemExit(128+number)))
-    main()
+    try:
+        main()
+    except ValueError as error:
+        raise SystemExit(str(error))
