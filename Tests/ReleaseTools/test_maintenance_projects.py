@@ -38,6 +38,7 @@ def item(identity='PVTI_A', kind='Issue', repository='Caldis/Pir', status='todo-
     if kind == 'Issue':
         content['parent'] = None
     return {'id': identity, 'isArchived': False, 'content': content,
+            'fieldValues': connection([]),
             'fieldValueByName': {'__typename': 'ProjectV2ItemFieldSingleSelectValue',
                                  'optionId': status, 'name': 'Todo', 'field': {'id': 'STATUS'}}}
 
@@ -153,6 +154,59 @@ class ProjectsTests(unittest.TestCase):
         bad_item = item()
         bad_item['fieldValueByName']['optionId'] = 'unknown'
         self.assertEqual(self.scan([bad_item])['items'][0]['skipReason'], 'unknown-status-option')
+
+    def test_draft_stage_links_parent_item_without_issue_conversion(self):
+        root, stage = item('root', 'DraftIssue'), item('stage', 'DraftIssue')
+        slug = self.m.task_slug(metadata()['id'], 'root')
+        stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:implementation -->\nParent item: root'
+        result = self.scan([stage, root])
+        self.assertEqual(result['items'][0]['action'], 'stage')
+        self.assertEqual(result['items'][0]['stageRoot']['itemId'], 'root')
+        self.assertFalse(result['items'][1]['requiresConversion'])
+        self.assertEqual(result['items'][1]['action'], 'new')
+        for line in ['', 'Parent item: ROOT', 'Parent item: foreign', 'Parent item: root\nParent item: root']:
+            stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:implementation -->\n{line}'
+            self.assertEqual(self.scan([stage, root])['items'][0]['action'], 'blocked')
+
+    def test_full_field_metadata_and_non_status_values_preserved(self):
+        meta, task = metadata(), item()
+        meta['fields']['nodes'].extend([
+            {'__typename': 'ProjectV2Field', 'id': 'ESTIMATE', 'name': 'Estimate', 'dataType': 'NUMBER'},
+            {'__typename': 'ProjectV2SingleSelectField', 'id': 'PRIORITY', 'name': 'Priority',
+             'options': [{'id': 'priority-high', 'name': 'High'}]}])
+        values = [{'__typename': 'ProjectV2ItemFieldNumberValue', 'id': 'VALUE1', 'number': 3,
+                   'field': {'id': 'ESTIMATE', 'name': 'Estimate'}},
+                  {'__typename': 'ProjectV2ItemFieldSingleSelectValue', 'id': 'VALUE2',
+                   'optionId': 'priority-high', 'name': 'High', 'field': {'id': 'PRIORITY', 'name': 'Priority'}}]
+        task['fieldValues'] = connection(values)
+        result = self.scan([task], meta=meta)
+        self.assertEqual(result['fields'], meta['fields']['nodes'])
+        self.assertEqual(result['items'][0]['fieldValues'], values)
+
+    def test_native_field_values_have_field_identity_without_invented_value_id(self):
+        task = item()
+        native = {'__typename': 'ProjectV2ItemFieldLabelValue',
+                  'field': {'id': 'LABELS', 'name': 'Labels'},
+                  'labels': connection([{'id': 'LABEL1', 'name': 'bug'}])}
+        task['fieldValues'] = connection([native])
+        self.assertEqual(self.scan([task])['items'][0]['fieldValues'], [native])
+        native['labels'] = connection([], 'more-labels')
+        with self.assertRaises(self.m.ScanError):
+            self.scan([task])
+        native['__typename'] = 'FutureProjectValue'
+        native['labels'] = connection([])
+        with self.assertRaises(self.m.ScanError):
+            self.scan([task])
+
+    def test_truncated_or_inaccessible_field_values_fail_closed(self):
+        task = item()
+        for values in [connection([], 'values-page-2'), connection([None]), None]:
+            task['fieldValues'] = values
+            with self.subTest(values=values), self.assertRaises(self.m.ScanError):
+                self.scan([task])
+        del task['fieldValues']
+        with self.assertRaises(self.m.ScanError):
+            self.scan([task])
 
     def test_parent_in_foreign_repository_requires_review(self):
         child = item('child')

@@ -17,9 +17,12 @@ STAGE_MARKER = re.compile(r'<!--\s*pir-maintainer:project-stage:([^\s:]+):([^\s>
 FIELDS = '''fields(first: 100, after: $cursor) {
   nodes {
     __typename
-    ... on ProjectV2Field { id name }
-    ... on ProjectV2IterationField { id name }
-    ... on ProjectV2SingleSelectField { id name options { id name } }
+    ... on ProjectV2Field { id name dataType }
+    ... on ProjectV2IterationField { id name dataType configuration { duration startDay
+      iterations { id title startDate duration } completedIterations { id title startDate duration }
+    } }
+    ... on ProjectV2SingleSelectField { id name dataType options { id name } }
+    ... on ProjectV2MultiSelectField { id name dataType multiSelectOptions { id name } }
   }
   pageInfo { hasNextPage endCursor }
 }'''
@@ -32,11 +35,34 @@ METADATA_QUERY = '''query($cursor: String) {
 FIELDS_QUERY = '''query($id: ID!, $cursor: String) {
   node(id: $id) { ... on ProjectV2 { id ''' + FIELDS + ''' } }
 }'''
+# Keep field IDs and value types so custom fields can be maintained without fixed IDs.
+FIELD_CONFIG = """fragment FieldConfig on ProjectV2FieldConfiguration {
+  ... on ProjectV2Field { id name dataType }
+  ... on ProjectV2SingleSelectField { id name dataType }
+  ... on ProjectV2IterationField { id name dataType }
+  ... on ProjectV2MultiSelectField { id name dataType }
+}"""
+VALUE_TYPES = {
+    'Date': 'date', 'Number': 'number', 'Text': 'text',
+    'MultiSelect': 'options { id name } value',
+    'SingleSelect': 'optionId name', 'Iteration': 'iterationId title startDate duration',
+    'Milestone': 'milestone { id title dueOn }',
+    'Repository': 'repository { id nameWithOwner }',
+    'Label': 'labels(first: 100) { nodes { id name } pageInfo { hasNextPage endCursor } }',
+    'User': 'users(first: 100) { nodes { id login } pageInfo { hasNextPage endCursor } }',
+    'Reviewer': 'reviewers(first: 100) { nodes { __typename ... on User { id login } ... on Team { id name } } pageInfo { hasNextPage endCursor } }',
+    'PullRequest': 'pullRequests(first: 100) { nodes { id url title state } pageInfo { hasNextPage endCursor } }',
+}
+VALUE_NODES = {'Date', 'Iteration', 'MultiSelect', 'Number', 'SingleSelect', 'Text'}
+FIELD_VALUES = 'fieldValues(first: 100) { nodes { __typename ' + ' '.join(
+    '... on ProjectV2ItemField' + kind + 'Value { ' + ('id ' if kind in VALUE_NODES else '') + 'field { ...FieldConfig } ' + selection + ' }'
+    for kind, selection in VALUE_TYPES.items()) + ' } pageInfo { hasNextPage endCursor } }'
 ITEMS_QUERY = '''query($id: ID!, $cursor: String) {
   node(id: $id) { ... on ProjectV2 {
     id items(first: 100, after: $cursor) {
       nodes {
         id isArchived
+        ''' + FIELD_VALUES + '''
         fieldValueByName(name: "Status") {
           __typename
           ... on ProjectV2ItemFieldSingleSelectValue {
@@ -56,7 +82,7 @@ ITEMS_QUERY = '''query($id: ID!, $cursor: String) {
       pageInfo { hasNextPage endCursor }
     }
   } }
-}'''
+}''' + '\n' + FIELD_CONFIG
 
 
 class ScanError(RuntimeError):
@@ -143,14 +169,54 @@ def stage_linkage(marker, parent, roots):
                           'issueNodeId': content['id'], 'issueURL': content['url']} if verified else None}
 
 
+def draft_stage_linkage(marker, body, roots):
+    parents = re.findall(r'^Parent item: ([^\s]+)[ \t]*$', body, flags=re.MULTILINE)
+    root = roots.get(marker['taskSlug'])
+    content = root.get('content') if root else None
+    verified = (not marker.get('ambiguous') and len(parents) == 1 and root is not None
+        and parents[0] == root['itemId'] and not root.get('stageMarker')
+        and isinstance(content, dict) and (content.get('__typename') == 'DraftIssue'
+            or (content.get('__typename') == 'Issue'
+                and content.get('repository', {}).get('nameWithOwner', '').casefold() == REPO.casefold())))
+    return {'action': 'stage' if verified else 'blocked',
+            'skipReason': 'stage-child' if verified else 'stage-linkage-unverified',
+            'stageRoot': {'taskSlug': root['taskSlug'], 'itemId': root['itemId']} if verified else None}
+
+
+def complete_connections(value):
+    if isinstance(value, dict):
+        if 'pageInfo' in value:
+            _, cursor = page(value)
+            if cursor is not None:
+                raise ScanError('GitHub Project field values exceed one page; snapshot discarded')
+        for nested in value.values():
+            complete_connections(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            complete_connections(nested)
+
+
 def normalize(item, project, status_field, pending):
     identity = required(item, 'id', str)
     archived = required(item, 'isArchived', bool)
     if 'content' not in item or 'fieldValueByName' not in item:
         raise ScanError('GitHub Project item is missing content or Status selection')
+    values = required(item, 'fieldValues', dict)
+    complete_connections(values)
+    nodes, cursor = page(values)
+    if cursor is not None:
+        raise ScanError('GitHub Project field values exceed one page; snapshot discarded')
+    for value in nodes:
+        required(value, '__typename', str)
+        kind = value['__typename']
+        if kind not in {'ProjectV2ItemField' + name + 'Value' for name in VALUE_TYPES}:
+            raise ScanError('GitHub Project returned an unsupported field value type; snapshot discarded')
+        if kind in {'ProjectV2ItemField' + name + 'Value' for name in VALUE_NODES}:
+            required(value, 'id', str)
+        required(required(value, 'field', dict), 'id', str)
     slug = task_slug(project['id'], identity)
     result = {'itemId': identity, 'taskSlug': slug, 'isArchived': archived,
-              'content': item['content'], 'issueAlias': None, 'parent': None,
+              'content': item['content'], 'fieldValues': nodes, 'issueAlias': None, 'parent': None,
               'stageMarker': None, 'requiresConversion': False, 'status': None,
               'action': 'new', 'skipReason': None, 'previous': pending.get(slug)}
     status = item['fieldValueByName']
@@ -201,7 +267,7 @@ def normalize(item, project, status_field, pending):
             if kind == 'PullRequest': reason = 'pull-request'
             if repository.casefold() != REPO.casefold(): reason = 'foreign-repository'
         elif kind == 'DraftIssue':
-            result['requiresConversion'] = True
+            result['requiresConversion'] = False
         else:
             reason = 'unsupported-content-type'
         if marker: reason = 'stage-linkage-unverified'
@@ -235,6 +301,10 @@ def scan(*, pending=None):
         node = node_data(graphql(FIELDS_QUERY, {'id': project['id'], 'cursor': cursor}), project['id'])
         more, cursor = page(required(node, 'fields', dict))
         fields.extend(more)
+    for field in fields:
+        required(field, '__typename', str)
+        required(field, 'id', str)
+        required(field, 'name', str)
     statuses = [field for field in fields if field.get('name') == 'Status']
     if len(statuses) != 1 or statuses[0].get('__typename') != 'ProjectV2SingleSelectField':
         raise ScanError('GitHub Project requires one single-select Status field')
@@ -265,11 +335,14 @@ def scan(*, pending=None):
     # Resolve after all pages: a child may precede its root in Project order.
     for item in items:
         if item['stageMarker']:
-            item.update(stage_linkage(item['stageMarker'], item['parent'], by_slug))
+            if item['content']['__typename'] == 'DraftIssue':
+                item.update(draft_stage_linkage(item['stageMarker'], item['content']['body'], by_slug))
+            else:
+                item.update(stage_linkage(item['stageMarker'], item['parent'], by_slug))
     resumes = [{'taskSlug': slug, 'previous': record, 'presentInProject': slug in by_slug,
                 'itemId': by_slug.get(slug, {}).get('itemId')}
                for slug, record in pending.items() if record.get('phase') != 'verified']
-    return {'schema': 1, 'repository': REPO, 'project': project, 'statusField': status_field,
+    return {'schema': 1, 'repository': REPO, 'project': project, 'fields': fields, 'statusField': status_field,
             'items': items, 'resumeTasks': resumes, 'recoveryFirst': True}
 
 
