@@ -10,3 +10,5 @@ tmp/
 xcuserdata/
 node_modules/
 website/dist/
+__pycache__/
+*.py[cod]
