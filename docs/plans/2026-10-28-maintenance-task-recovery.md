@@ -20,3 +20,10 @@ Acceptance tests: real CLI cross-run resume; new task plan/slug validation and i
 2. Worker writes red regressions, implements the minimal compatible state/CLI extension, runs ReleaseTools tests and commits locally without external writes.
 3. Coordinator updates the canonical skill/lifecycle to use task checkpoints before independent work, integrates worker, simulates cold cross-run recovery, runs full checks and independent read-only review.
 4. Create one PR, require current-head Check success, merge matching head and read back. Checkpoint this actual task verified with `release=not-required`, record result/evidence, archive completed worker after copying evidence, finish activation with explicit outcome.
+
+## Validation evidence
+
+- Worker RED reproduced the original CLI requiring `--issue` and Store lacking a task keyword; logs copied to the durable run evidence directory before worktree cleanup.
+- Worker `scripts/check.sh` exit 0: 130 Swift tests, 50 ReleaseTools tests, localizations, website and shell checks. Integrated ReleaseTools rerun: 50 tests pass. Skill validator and `git diff --check` pass.
+- Independent read-only reviewer ran 35 maintenance tests and an extra temporary-state crash/recovery scenario. With zero open issues, the scanner discovers the same pr_open task/PR/head without issue API lookups; expired lease requires explicit recovery, old writer is rejected, blocked context and unchanged issue state survive, idle/verification gates remain enforced. Review passed at integrated code head 3c691bf.
+- This activation itself now has a private `maintenance-task-recovery` checkpoint with its plan/workspace/next action; no synthetic issue or task Telegram event was created. No app UI or release is needed because product code is unchanged.
