@@ -2,7 +2,7 @@
 
 | 任务 | 入口 | 验证 |
 | --- | --- | --- |
-| 每小时 issue 维护与发布恢复 | `.agents/skills/pir-maintainer/SKILL.md`, `scripts/maintenance/cycle.py` | lease/checkpoint/comment 测试、当前 head CI、公开发布回读 |
+| 定时 issue 维护与发布恢复 | `.agents/skills/pir-maintainer/SKILL.md`, `scripts/maintenance/cycle.py` | lease/checkpoint/comment 测试、当前 head CI、公开发布回读 |
 | 应用行为与界面 | `docs/architecture.md`, `Sources/`, `Tests/` | `scripts/check.sh`, 本机交互 |
 | 原生偏好窗口 | `Sources/Pir/Preferences/PreferencesStyle.swift`, `Sources/Pir/Preferences/PreferencesWindowController.swift` | `PinManagementTests`, 本机页签与录制交互 |
 | 热键录制与注册 | `THIRD_PARTY_NOTICES.md`, `Sources/Pir/`, `Sources/PirCore/` | 快捷键测试与跨应用触发 |

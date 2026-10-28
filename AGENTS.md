@@ -6,7 +6,7 @@
 2. 执行 `git status --short --branch`, 保留已有改动
 3. 按索引读取当前任务涉及的源码与文档
 4. 修改前确认实际行为与范围, 完成后运行对应验证
-5. GitHub issue 巡检、维护闭环或恢复未完成发布时, 必读 `.agents/skills/pir-maintainer/SKILL.md`; 每小时自动化从当前 Pir 会话启动, 不在其他项目会话创建
+5. GitHub issue 巡检、维护闭环或恢复未完成发布时, 必读 `.agents/skills/pir-maintainer/SKILL.md`; 定时自动化从当前 Pir 会话启动, 不在其他项目会话创建
 
 ## 产品边界
 

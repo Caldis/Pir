@@ -108,12 +108,49 @@ class Store:
             self.require(data, run_id, now)
             return operation()
 
-    def finish(self, run_id, now=None):
+    def summary(self):
+        data = self.read()
+        fields = ('phase', 'fingerprint', 'pr', 'prHeadSha', 'mergeSha', 'buildSha', 'tagSha',
+                  'release', 'version', 'build', 'worktree', 'branch', 'nextAction',
+                  'externalJob', 'retryWhen', 'resumePhase', 'evidence')
+        notifications = {}
+        for item in data.get('notifications', {}).values():
+            status = item.get('status', 'unknown')
+            notifications[status] = notifications.get(status, 0) + 1
+        return {'repository': REPO, 'lease': data.get('lease'), 'lastRun': data.get('lastRun'),
+                'issues': {number: {k: item[k] for k in fields if k in item}
+                           for number, item in data['issues'].items() if item.get('phase') != 'verified'},
+                'verifiedCount': sum(item.get('phase') == 'verified' for item in data['issues'].values()),
+                'notifications': notifications}
+
+    def finish(self, run_id, now=None, outcome='completed', note=None, next_action=None, evidence=None):
         now = time.time() if now is None else now
+        if outcome not in ('idle', 'completed', 'waiting', 'blocked', 'failed'):
+            raise ValueError('Unknown run outcome')
         with self.transaction() as data:
-            self.require(data, run_id, now)
-            data['lastRun'] = data['lease']
+            if not data.get('lease') and data.get('lastRun', {}).get('id') == run_id:
+                return data['lastRun']
+            lease = self.require(data, run_id, now)
+            if outcome == 'idle' and any(item.get('phase') != 'verified' for item in data['issues'].values()):
+                raise ValueError('Unfinished checkpoints require a waiting/blocked/failed or completed cycle result')
+            result = {**lease, 'finishedAt': now, 'outcome': outcome}
+            for key, value in (('note', note), ('nextAction', next_action), ('evidence', evidence)):
+                if value is not None: result[key] = value
+            # Persist the handoff before releasing ownership. An I/O failure keeps the lease intact.
+            journal = self.root / 'runs'
+            journal.mkdir(mode=0o700, exist_ok=True)
+            fd, name = tempfile.mkstemp(dir=journal, prefix='.run-')
+            try:
+                with os.fdopen(fd, 'w') as output:
+                    json.dump(result, output, ensure_ascii=False, indent=2)
+                    output.flush()
+                    os.fsync(output.fileno())
+                os.replace(name, journal / (run_id + '.json'))
+            finally:
+                if os.path.exists(name): os.unlink(name)
+            data['lastRun'] = result
             data['lease'] = None
+        return result
 
 
 def fingerprint(issue, comments, viewer):
@@ -186,7 +223,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state-dir', type=Path, default=Path.home() / '.config/pir/maintenance')
     commands = parser.add_subparsers(dest='command', required=True)
-    commands.add_parser('status')
+    status = commands.add_parser('status')
+    status.add_argument('--full', action='store_true')
     commands.add_parser('scan')
     begin = commands.add_parser('begin')
     begin.add_argument('--ttl', type=int, default=7200)
@@ -194,12 +232,18 @@ def main():
     for name in ('guard', 'finish', 'checkpoint', 'comment'):
         sub = commands.add_parser(name)
         sub.add_argument('--run-id', required=True)
+        if name == 'finish':
+            sub.add_argument('--outcome', choices=['idle', 'completed', 'waiting', 'blocked', 'failed'], default='completed')
+            sub.add_argument('--note')
+            sub.add_argument('--next-action')
+            sub.add_argument('--evidence', action='append')
         if name == 'guard': sub.add_argument('--renew', type=int, choices=range(60, 86401), metavar='SECONDS')
         if name in ('checkpoint', 'comment'): sub.add_argument('--issue', required=True, type=int)
         if name == 'checkpoint':
             sub.add_argument('--phase', choices=PHASES, required=True)
             for field in ('fingerprint', 'sha', 'release', 'note', 'version', 'build',
-                          'pr-head-sha', 'merge-sha', 'build-sha', 'tag-sha', 'retry-when', 'resume-phase'): sub.add_argument('--' + field)
+                          'pr-head-sha', 'merge-sha', 'build-sha', 'tag-sha', 'retry-when', 'resume-phase',
+                          'worktree', 'branch', 'next-action', 'external-job'): sub.add_argument('--' + field)
             sub.add_argument('--pr', type=int)
             sub.add_argument('--evidence', action='append')
         if name == 'comment':
@@ -208,17 +252,20 @@ def main():
             sub.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
     store = Store(args.state_dir)
-    if args.command == 'status': result = store.read()
+    if args.command == 'status': result = store.read() if args.full else store.summary()
     elif args.command == 'scan': result = scan(store)
     elif args.command == 'begin': result = store.begin(ttl=args.ttl, recover=args.recover_expired)
     elif args.command == 'guard': result = store.guard(args.run_id, renew=args.renew)
-    elif args.command == 'finish': store.finish(args.run_id); result = {'finished': True}
+    elif args.command == 'finish':
+        result = store.finish(args.run_id, outcome=args.outcome, note=args.note,
+                              next_action=args.next_action, evidence=args.evidence)
     elif args.command == 'checkpoint':
         fields = {k: v for k, v in vars(args).items() if k in
                   ('phase', 'fingerprint', 'sha', 'release', 'note', 'pr', 'evidence', 'version', 'build',
-                   'pr_head_sha', 'merge_sha', 'build_sha', 'tag_sha', 'retry_when', 'resume_phase') if v is not None}
+                   'pr_head_sha', 'merge_sha', 'build_sha', 'tag_sha', 'retry_when', 'resume_phase', 'worktree', 'branch', 'next_action', 'external_job') if v is not None}
         aliases = {'pr_head_sha': 'prHeadSha', 'merge_sha': 'mergeSha', 'build_sha': 'buildSha',
-                   'tag_sha': 'tagSha', 'retry_when': 'retryWhen', 'resume_phase': 'resumePhase'}
+                   'tag_sha': 'tagSha', 'retry_when': 'retryWhen', 'resume_phase': 'resumePhase',
+                   'next_action': 'nextAction', 'external_job': 'externalJob'}
         fields = {aliases.get(k, k): v for k, v in fields.items()}
         result = store.checkpoint(args.run_id, args.issue, fields)
     else:
