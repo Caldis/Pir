@@ -179,3 +179,27 @@ Limited Review: 桌面自动化对非激活浮窗 hover 的投递支持有限, �
 公证 CLI 的既有 notarytool profile 在本轮故障期间持续可用. 签名阶段曾出现 missing Xcode-Username / No Accounts, 账户认证恢复后同一命令行云导出成功. 本地代码签名身份枚举与云签名能力分别记录, 公证凭据与签名认证分别验证
 
 证据、公开下载、日志与本轮隔离会话位于 ~/.config/pir/migration/release-verification/0.1.7/. 预览会话与升级会话分别归档, 用户偏好与既有 Keychain 密钥保留, 已安装正式版恢复常规运行
+
+## 0.1.8 发行验收
+
+2026-10-28 完成正式发行, 显示版本 0.1.8, 构建编号 20261027.1. 功能合并提交为 f256c887c414d5348f867160a828b1960436d233, 签名 feed 提交为 52ddafe7c98fddce67deb456ba24a684f11ffaab
+
+| 范围 | 结果 |
+| --- | --- |
+| Issue 与实施 | Caldis 提交的 #22 完成, PR #23 合入 main; Bundle 资源名加载在 1x 环境选择 18 px 图标, 在 2x 环境选择 36 px 图标 |
+| 检查与构建 | 128 项 Swift 测试、5 项 Python 发布工具测试、本地化、网站与脚本检查通过; arm64/x86_64 Universal, 最低 macOS 13, SDK 27 |
+| 分发签名 | 复用 Mac mini 的既有 Developer ID Application: BIAO CHEN, Team N7Z52F27XK; 临时钥匙串导入后签名, 严格验签通过 |
+| 应用公证 | asc 的 d2r profile 提交, Apple Accepted, 提交 c45cf6db-b6f0-4458-9651-44ff63f27773; 票据与 Gatekeeper 通过 |
+| DMG 公证 | Developer ID 签名, Apple Accepted, 提交 9b1d0eb4-03a0-4cd9-9d7b-66de1888b406; 票据、签名与镜像校验通过 |
+| 公开发行 | [Pir 0.1.8](https://github.com/Caldis/Pir/releases/tag/0.1.8), 公开 DMG 与更新 ZIP 的 SHA256 一致, 公开 feed 与仓库逐字节一致 |
+| 独立验签 | 公开 feed 与 ZIP 经应用公钥独立 Ed25519 验签通过; 公开 ZIP 与只读挂载 DMG 内的应用通过签名、票据与 Gatekeeper |
+| 实际更新 | 已安装 0.1.7 / 20261026.9 通过 Sparkle 下载、安装并自动重启至 0.1.8 / 20261027.1, 再次检查显示最新版 |
+| 安装与会话 | 已安装应用的 118 个常规文件与公开 ZIP 一致; 三项文件与文本会话保留内容、尺寸、位置和隐藏状态, 元数据补入默认 imageScaling=cover |
+| CI | PR [40492891077](https://github.com/Caldis/Pir/actions/runs/40492891077)、功能合并 [40493506246](https://github.com/Caldis/Pir/actions/runs/40493506246) 与 feed [40623356439](https://github.com/Caldis/Pir/actions/runs/40623356439) 均成功 |
+| Issue 回读 | #22 关闭为 completed |
+
+Limited Review: 桌面工具截图覆盖应用窗口, 系统菜单栏的整体视觉对比仍属有限人工覆盖. 回归测试与打包后探针验证实际 1x/2x representation 选择, 两份 PNG 保持原始像素
+
+签名证书、私钥和 P12 的实时位置为 SSH 主机 macmini 的 /Users/caldis/Docs/ci-signing/keys/. 本轮临时钥匙串签名使用原有文件, 结束后恢复钥匙串搜索列表并清理临时材料. 原有云导出权限错误仅对应该云签名路径
+
+发行证据、独立公开下载、日志与测试会话归档位于 ~/.config/pir/migration/release-verification/0.1.8/. 已安装正式版恢复常规运行, 用户偏好与原有凭据保留
