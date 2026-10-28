@@ -4,7 +4,7 @@ Target: https://github.com/users/Caldis/projects/7 (personal owner `Caldis`, num
 
 ## Read, identify and recover
 
-Run `python3 scripts/maintenance/projects.py` and `cycle.py scan`; save both JSON snapshots under the current run. Project reads paginate all fields/items and report errors rather than an empty backlog. A failed Project read is a stable source blocker; continue independent issue/release recovery, deduplicate unchanged faults, and retry a bounded read on a later activation. Do not change authentication unattended. Owner-authorized authentication uses `gh auth refresh -h github.com -s project` (read queries need read:project, classic/OAuth writes need project). Never log credentials.
+Run `python3 scripts/maintenance/projects.py` and `cycle.py scan`; save both JSON snapshots under the current run. Project reads paginate all fields/items and report errors rather than an empty backlog. A failed Project read is a stable source blocker; continue independent issue/release recovery, deduplicate unchanged faults, and retry a bounded read on a later activation. Use only the native installation bot via [github-identity.md](github-identity.md); all `gh` commands below run through `python3 scripts/maintenance/github_app.py run --`. Project #7 currently returns NOT_FOUND to that App: retain local checkpoints and pending synchronization until same-actor read and mutation access are proven. Never refresh owner OAuth scopes, route to personal credentials, or migrate the Project without a separate owner decision. Never log credentials.
 
 The case-sensitive `(project node ID, item node ID)` is the identity. Use the helper taskSlug with `checkpoint --task SLUG --plan PATH`. Store project/item IDs, field/option IDs, aliases, stage item/content IDs, PR/head, release and pending write intents in the plan/evidence. Never use titles, row positions or lowercased IDs as identity. Recover pending records even if an item is Done, archived, closed or absent; reconcile cancellation before writes. Verified work does not restart just because someone changes a status.
 
@@ -16,7 +16,7 @@ For an issue also represented in Project, the item is the work unit and issue is
 
 GitHub native sub-issues are repository issues and appear in the repository list. The owner instead chose **Project draft stage items with parent-item links**. These are logical children, not native GitHub issue hierarchy; do not claim native Parent issue/Sub-issues progress fields apply to drafts. Do not create new issues to simulate hierarchy.
 
-Before each bounded worker stage, the coordinator creates/reuses one draft item in Project #7. Its body includes acceptance, scope, worker, actual phase, evidence and next action, plus:
+Before each bounded worker stage, the coordinator creates/reuses one draft item in Project #7 when the App has proven access. During the explicitly authorized App bootstrap with Project access blocked, record the stage locally and pending synchronization under github-identity.md; never claim a remote item exists. Accessible draft stages follow this format. Its body includes acceptance, scope, worker, actual phase, evidence and next action, plus:
 
 ```text
 <!-- pir-maintainer:project-stage:ROOT_TASK_SLUG:STAGE -->

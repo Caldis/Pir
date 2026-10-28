@@ -46,6 +46,11 @@ def item(identity='PVTI_A', kind='Issue', repository='Caldis/Pir', status='todo-
 class ProjectsTests(unittest.TestCase):
     def setUp(self):
         self.m = module()
+        auth = patch.object(self.m, 'app_client')
+        self.auth = auth.start().return_value
+        self.addCleanup(auth.stop)
+        self.auth.environment.return_value = {'GH_TOKEN': 'offline-fixture'}
+        self.auth.actor.return_value = 'caldis-pir-maintainer[bot]'
 
     def scan(self, items, pending=None, meta=None):
         meta = meta or metadata()
@@ -331,3 +336,13 @@ class ProjectsTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ProjectAppIdentityTests(unittest.TestCase):
+    def test_missing_app_auth_stops_before_gh_and_never_falls_back(self):
+        m = module()
+        with patch.object(m, 'app_client') as auth, patch.object(m.subprocess, 'run') as run:
+            auth.return_value.environment.side_effect = m._auth.AuthError('GitHub App local credential is unavailable')
+            with self.assertRaises(m.ScanError) as failure: m.graphql('query {}', {})
+            run.assert_not_called()
+            self.assertIn('no owner credential fallback', str(failure.exception))
