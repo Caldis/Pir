@@ -7,6 +7,16 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.8</title>
+      <sparkle:version>20261027.1</sparkle:version>
+      <sparkle:shortVersionString>0.1.8</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Wed, 28 Oct 2026 02:50:13 +0000</pubDate>
+      <description>&lt;!doctype html&gt;&lt;html&gt;&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;/head&gt;&lt;body&gt;&lt;h2&gt;Pir 0.1.8&lt;/h2&gt;&lt;p&gt;修复 Retina 屏幕上菜单栏图标模糊的问题&lt;/p&gt;&lt;p&gt;Fix blurry menu bar icons on Retina displays.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;
+</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.8/Pir.Versions.0.1.8-20261027.1.zip" length="6739549" type="application/octet-stream" sparkle:edSignature="PmiOhJONypuPpP+i49eF5OE6mP9/OFpt+2PdJOlwIis94neYrJMLZUHXzToRRW/1QUt1DCttpHR6WArhIDVdDg=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.7</title>
       <sparkle:version>20261026.9</sparkle:version>
       <sparkle:shortVersionString>0.1.7</sparkle:shortVersionString>
@@ -119,6 +129,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: /cO2G8E9KcH4hV9zOUhZLR9dkAdPpqXpL61uIFBdjy/FHVx8UvwvXlBnnk8R3psEKE1bO7zXWAKWsAyWcNrlBw==
-length: 8727
+edSignature: IGhs3sLJ8wi9RNz2KA3Se3cBxdae6XpnbMnyVXakVbtgxcFZZONK03sIxuEbvy1UmeRIme9Mbg1OTrQUs7lgAA==
+length: 9640
 -->
