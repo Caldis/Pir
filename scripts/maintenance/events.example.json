@@ -6,6 +6,7 @@
   "state_path": "/Users/OWNER/.config/pir/maintenance/state.json",
   "thread_id": "EXISTING_PIR_THREAD_ID",
   "cwd": "/Users/OWNER/Code/Pir",
+  "control_socket": null,
   "codex": "/absolute/path/to/codex",
   "request_timeout": 30,
   "turn_timeout": 7200,

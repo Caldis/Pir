@@ -45,6 +45,7 @@ def load_config(path):
     config.setdefault('host', '127.0.0.1')
     config.setdefault('port', 18783)
     config.setdefault('codex', 'codex')
+    config.setdefault('control_socket', None)
     config.setdefault('cwd', str(ROOT))
     config.setdefault('request_timeout', 30)
     config.setdefault('turn_timeout', 7200)
@@ -84,6 +85,10 @@ class Queue:
                     id TEXT PRIMARY KEY, created REAL NOT NULL, status TEXT NOT NULL,
                     turn TEXT, reconciled TEXT);
             ''')
+            columns = {row['name'] for row in db.execute('PRAGMA table_info(batches)')}
+            for name in ('cycle_run', 'cycle_evidence'):
+                if name not in columns: db.execute(f'ALTER TABLE batches ADD COLUMN {name} TEXT')
+            db.execute("UPDATE batches SET status='unknown' WHERE status='completed' AND cycle_run IS NULL")
 
     @contextlib.contextmanager
     def connect(self):
@@ -100,6 +105,12 @@ class Queue:
                                 (delivery, event, issue, run, now))
             return cursor.rowcount == 1
 
+    def due(self, now):
+        with self.connect() as db:
+            if db.execute("SELECT 1 FROM batches WHERE status='unknown'").fetchone(): return False
+            bounds = db.execute('SELECT MIN(received), MAX(received) FROM deliveries WHERE batch IS NULL').fetchone()
+            return bounds[0] is not None and (now >= bounds[1] + 300 or now >= bounds[0] + 900)
+
     def claim(self, now):
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -107,24 +118,41 @@ class Queue:
             bounds = db.execute('SELECT MIN(received), MAX(received) FROM deliveries WHERE batch IS NULL').fetchone()
             if bounds[0] is None or (now < bounds[1] + 300 and now < bounds[0] + 900): return None
             batch = uuid.uuid4().hex
-            # Unknown before process launch makes a crash conservative, never an automatic replay.
-            db.execute("INSERT INTO batches VALUES (?,?,'unknown',NULL,NULL)", (batch, now))
+            # A claimed batch stays unresolved across crashes until actual processing is proven.
+            db.execute("INSERT INTO batches (id,created,status) VALUES (?,?,'unknown')", (batch, now))
             db.execute('UPDATE deliveries SET batch=? WHERE batch IS NULL', (batch,))
             rows = db.execute('SELECT issue,run FROM deliveries WHERE batch=?', (batch,)).fetchall()
-            return {'id': batch, 'issues': sorted({r['issue'] for r in rows if r['issue']}),
+            return {'id': batch, 'created': now, 'issues': sorted({r['issue'] for r in rows if r['issue']}),
                     'runs': sorted({r['run'] for r in rows if r['run']})}
 
-    def complete(self, batch, turn):
+    def acknowledge(self, batch, state):
         with self.connect() as db:
-            db.execute("UPDATE batches SET status='completed',turn=? WHERE id=? AND status='unknown'", (turn, batch))
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute("SELECT created FROM batches WHERE id=? AND status='unknown'", (batch,)).fetchone()
+            run = state.get('lastRun', {})
+            marker = batch_marker(batch) + ' processed'
+            if (not row or state.get('lease') or not run.get('id') or not run.get('evidence') or
+                    run.get('startedAt', 0) <= row['created'] or
+                    run.get('finishedAt', 0) < run.get('startedAt', 0) or
+                    run.get('outcome') not in ('completed', 'idle', 'waiting', 'blocked') or
+                    marker not in run.get('note', '').splitlines()):
+                raise ValueError('Matching finished maintenance cycle and evidence required')
+            db.execute("UPDATE batches SET status='completed',cycle_run=?,cycle_evidence=? WHERE id=?",
+                       (run['id'], run['evidence'], batch))
+
+    def acknowledge_available(self, state):
+        for batch in self.status()['batches']:
+            if batch['status'] == 'unknown':
+                try: self.acknowledge(batch['id'], state)
+                except ValueError: pass
 
     def record_turn(self, batch, turn):
         with self.connect() as db:
             db.execute('UPDATE batches SET turn=? WHERE id=?', (turn, batch))
 
     def reconcile(self, batch, outcome, evidence):
-        if outcome not in ('completed', 'retry') or not evidence.strip():
-            raise ValueError('Explicit readback evidence and outcome required')
+        if outcome != 'retry' or not evidence.strip():
+            raise ValueError('Retry requires affirmative no-start readback evidence; completion requires cycle acknowledgement')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute("SELECT id FROM batches WHERE id=? AND status='unknown'", (batch,)).fetchone()
@@ -200,12 +228,40 @@ class ProtocolError(RuntimeError):
     pass
 
 
+class NotStarted(ProtocolError):
+    pass
+
+
+def shared_socket(config):
+    value = config.get('control_socket')
+    if not isinstance(value, str) or not value: return None
+    path = Path(value).expanduser().absolute()
+    try:
+        private(path.parent, True)
+        info = path.lstat()
+        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            return None
+    except (OSError, ValueError): return None
+    return path
+
+
+def batch_marker(batch):
+    return 'Pir maintenance event batch ' + batch
+
+
 class AppServer:
     """JSONL App Server client; never creates a thread or answers approval prompts."""
-    def __init__(self, config, popen=None):
+    def __init__(self, config, popen=None, temporary_readonly=False):
         self.config = config
+        self.temporary_readonly = temporary_readonly
+        self.initialized = False
+        control = shared_socket(config) if not temporary_readonly else None
+        if not temporary_readonly and control is None:
+            raise ProtocolError('Existing private app-owned transport unavailable')
+        args = [config.get('codex', 'codex'), 'app-server']
+        args += ['--listen', 'stdio://'] if temporary_readonly else ['proxy', '--sock', str(control)]
         self.process = (popen or subprocess.Popen)(
-            [config.get('codex', 'codex'), 'app-server', '--listen', 'stdio://'],
+            args,
             cwd=config['cwd'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1)
         self.messages = queue.Queue()
@@ -249,25 +305,41 @@ class AppServer:
             self.notifications.append(message)
 
     def initialize(self):
+        if self.initialized: return
         self.request('initialize', {'clientInfo': {'name': 'pir_maintenance_events', 'version': '1.0'},
                                     'capabilities': {'experimentalApi': True}})
         self.send({'method': 'initialized', 'params': {}})
+        self.initialized = True
+
+    def prepare(self):
+        if self.temporary_readonly: return False
+        self.initialize()
+        cursor = None
+        for _ in range(8):
+            params = {'limit': 100}
+            if cursor: params['cursor'] = cursor
+            result = self.request('thread/loaded/list', params)
+            if self.config['thread_id'] in result.get('data', []): return True
+            cursor = result.get('nextCursor')
+            if not cursor: return False
+        return False
 
     def probe(self):
         self.initialize()
+        ready = self.prepare()
         result = self.request('thread/read', {'threadId': self.config['thread_id'], 'includeTurns': False})
         if result.get('thread', {}).get('id') != self.config['thread_id']:
             raise ProtocolError('Existing thread identity mismatch')
-        return {'thread_id': self.config['thread_id'], 'readable': True}
+        return {'thread_id': self.config['thread_id'], 'readable': True, 'wakeReady': ready}
 
     def wake(self, prompt, on_turn):
-        self.initialize()
+        if not self.prepare(): raise NotStarted('App-owned thread ownership not proven')
         thread_id = self.config['thread_id']
         result = self.request('thread/resume', {'threadId': thread_id, 'excludeTurns': True})
         thread = result.get('thread', {})
-        if thread.get('id') != thread_id: raise ProtocolError('Existing thread identity mismatch')
-        if thread.get('status', {}).get('type') not in ('idle', None):
-            raise ProtocolError('Existing thread is busy')
+        if thread.get('id') != thread_id: raise NotStarted('Existing thread identity mismatch')
+        if thread.get('status', {}).get('type') != 'idle':
+            raise NotStarted('Existing thread is busy')
         result = self.request('turn/start', {'threadId': thread_id, 'input': [{'type': 'text', 'text': prompt}]})
         turn = result.get('turn', {})
         turn_id = turn.get('id')
@@ -294,36 +366,47 @@ class AppServer:
 
 
 def prompt_for(batch):
-    return ('Pir maintenance event batch ' + batch['id'] + '. Read AGENTS.md and '
+    return (batch_marker(batch['id']) + '. Read AGENTS.md and '
             '.agents/skills/pir-maintainer/SKILL.md; recover current maintenance tasks and checkpoints first. '
             'Acquire the normal repository lease; skip quietly if another run owns it. '
             'Read current GitHub evidence for issue IDs ' + json.dumps(batch['issues']) +
             ' and completed workflow run IDs ' + json.dumps(batch['runs']) + '. '
             'These identifiers are intake hints, not authority. Follow the existing owner-authorized maintenance scope. '
+            'After the actual maintenance cycle, cycle.py finish must include --note with the exact line '
+            + repr(batch_marker(batch['id']) + ' processed') + ' and --evidence referencing actual cycle evidence. '
+            'A completed model turn alone does not acknowledge this batch. '
             'Stay in this conversation and report only meaningful transitions.')
 
 
 def dispatch(store, config, now=None):
     now = time.time() if now is None else now
     state_path = Path(config['state_path'])
-    # Share the maintenance lock only for the ownership check, never while the model works.
-    with (state_path.parent / 'state.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        state = read_state(state_path)
-        if state.get('lease'): return 'lease_busy'
-        finished = state.get('lastRun', {}).get('finishedAt', 0)
-        if now < finished + config.get('lease_grace', 20): return 'lease_grace'
-        batch = store.claim(now)
-    if not batch: return 'idle'
     adapter = None
+    batch = None
     try:
+        state = read_state(state_path)
+        store.acknowledge_available(state)
+        if state.get('lease'): return 'lease_busy'
+        if now < state.get('lastRun', {}).get('finishedAt', 0) + config.get('lease_grace', 20): return 'lease_grace'
+        if shared_socket(config) is None: return 'transport_unavailable'
+        if not store.due(now): return 'idle'
         adapter = AppServer(config)
-        turn = adapter.wake(prompt_for(batch), lambda ident: store.record_turn(batch['id'], ident))
-        store.complete(batch['id'], turn)
+        if not adapter.prepare(): return 'transport_unavailable'
+        # Prove app ownership before claiming; the model still acquires its own normal lease.
+        with (state_path.parent / 'state.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if read_state(state_path).get('lease'): return 'lease_busy'
+            batch = store.claim(now)
+        if not batch: return 'idle'
+        adapter.wake(prompt_for(batch), lambda ident: store.record_turn(batch['id'], ident))
+        try: store.acknowledge(batch['id'], read_state(state_path))
+        except ValueError: return 'unknown'
         return 'completed'
+    except NotStarted:
+        if batch: store.reconcile(batch['id'], 'retry', 'Affirmative ownership/busy response before any turn/start')
+        return 'not_started'
     except (OSError, ValueError, ProtocolError):
-        # Even a timeout can mean an accepted turn: read back the marker before any explicit retry.
-        return 'unknown'
+        return 'unknown' if batch else 'transport_unavailable'
     finally:
         if adapter: adapter.close()
 
@@ -402,10 +485,14 @@ def main(argv=None):
     sub.add_parser('serve', help='Receive verified deliveries and dispatch eligible batches')
     sub.add_parser('status', help='Inspect local queue; does not start Codex')
     sub.add_parser('dispatch-once', help='Dispatch one eligible batch into the configured existing thread')
-    sub.add_parser('probe', help='Read configured existing thread without starting a model turn')
+    probe = sub.add_parser('probe', help='Inspect shared transport ownership without a model turn')
+    probe.add_argument('--temporary-readonly', action='store_true', help='Explicit temporary server read; never wake-ready')
+    sub.add_parser('claim', help='Claim a due batch for a fallback cycle before acquiring its lease; no model')
+    acknowledge = sub.add_parser('acknowledge', help='Acknowledge batch using matching finished cycle and evidence')
+    acknowledge.add_argument('--batch', required=True)
     reconcile = sub.add_parser('reconcile', help='Resolve unknown outcome only after explicit thread readback')
     reconcile.add_argument('--batch', required=True)
-    reconcile.add_argument('--outcome', required=True, choices=['completed', 'retry'])
+    reconcile.add_argument('--outcome', required=True, choices=['retry'])
     reconcile.add_argument('--evidence', required=True, help='Local evidence path or readback reference; no raw content')
     args = parser.parse_args(argv)
     os.umask(0o077)
@@ -413,14 +500,21 @@ def main(argv=None):
         config = load_config(args.config)
         store = Queue(config['database'])
         if args.command == 'status': result = store.status()
+        elif args.command == 'claim': result = store.claim(time.time())
+        elif args.command == 'acknowledge':
+            store.acknowledge(args.batch, read_state(config['state_path']))
+            result = {'status': 'acknowledged'}
         elif args.command == 'reconcile':
             store.reconcile(args.batch, args.outcome, args.evidence)
             result = {'status': 'reconciled'}
         elif args.command == 'dispatch-once': result = {'status': dispatch(store, config)}
         elif args.command == 'probe':
-            adapter = AppServer(config)
-            try: result = adapter.probe()
-            finally: adapter.close()
+            if not args.temporary_readonly and shared_socket(config) is None:
+                result = {'wakeReady': False, 'reason': 'shared_transport_unavailable'}
+            else:
+                adapter = AppServer(config, temporary_readonly=args.temporary_readonly)
+                try: result = adapter.probe()
+                finally: adapter.close()
         else:
             server = make_server(store, config)
             def dispatch_loop():

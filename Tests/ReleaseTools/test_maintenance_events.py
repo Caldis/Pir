@@ -1,4 +1,5 @@
 import hashlib
+import contextlib
 import hmac
 import importlib.util
 import json
@@ -7,6 +8,9 @@ from email.message import Message
 import queue
 from pathlib import Path
 import tempfile
+import stat
+import os
+from types import SimpleNamespace
 import unittest
 import uuid
 from unittest.mock import patch, Mock
@@ -35,6 +39,12 @@ class EventTestCase(unittest.TestCase):
         sig = 'sha256=' + hmac.new(b'secret', body, hashlib.sha256).hexdigest()
         return self.m.intake(self.queue, b'secret', event, delivery or str(uuid.uuid4()), sig if signature is None else signature, body, {}, now=100)
 
+
+    def finished_cycle(self, batch, started, lease=None):
+        return {'schema': 1, 'repository': 'Caldis/Pir', 'lease': lease,
+                'lastRun': {'id': 'cycle-1', 'startedAt': started, 'finishedAt': started + 10,
+                            'outcome': 'completed', 'note': self.m.batch_marker(batch) + ' processed',
+                            'evidence': '/private/cycle-evidence.json'}}
 
 
 class EventTests(EventTestCase):
@@ -72,7 +82,7 @@ class EventTests(EventTestCase):
         self.assertEqual(batch['issues'], [12, 13])
         self.queue.accept(str(uuid.uuid4()), 'issues', 14, None, 700)
         self.assertIsNone(self.queue.claim(2000))
-        self.queue.complete(batch['id'], 'turn-1')
+        self.queue.acknowledge(batch['id'], self.finished_cycle(batch['id'], 691))
         self.assertEqual(self.queue.claim(2000)['issues'], [14])
 
     def test_max_wait_and_unknown_outcome_requires_explicit_reconcile(self):
@@ -177,8 +187,31 @@ class EventTests(EventTestCase):
         server.slots.acquire.assert_called_once_with(blocking=False)
 
 
+    def test_legacy_turn_completion_migrates_to_unresolved_without_cycle_evidence(self):
+        path = self.root / 'legacy.sqlite3'
+        with contextlib.closing(self.m.sqlite3.connect(path)) as db:
+            db.execute('CREATE TABLE batches (id TEXT PRIMARY KEY, created REAL, status TEXT, turn TEXT, reconciled TEXT)')
+            db.execute("INSERT INTO batches VALUES ('legacy',100,'completed','turn-old',NULL)")
+            db.commit()
+        batch = self.m.Queue(path).status()['batches'][0]
+        self.assertEqual(batch['status'], 'unknown')
+        self.assertIsNone(batch['cycle_run'])
+
+    def test_shared_control_socket_requires_private_socket_owned_by_user(self):
+        path = self.root / 'control.sock'
+        config = {'control_socket': str(path)}
+        self.assertIsNone(self.m.shared_socket(config))
+        for mode, uid, allowed in ((stat.S_IFSOCK | 0o600, os.getuid(), True),
+                                    (stat.S_IFSOCK | 0o666, os.getuid(), False),
+                                    (stat.S_IFREG | 0o600, os.getuid(), False),
+                                    (stat.S_IFLNK | 0o600, os.getuid(), False),
+                                    (stat.S_IFSOCK | 0o600, os.getuid() + 1, False)):
+            with patch.object(self.m, 'private'), patch.object(Path, 'lstat', return_value=SimpleNamespace(st_mode=mode, st_uid=uid)):
+                self.assertEqual(self.m.shared_socket(config), path if allowed else None)
+
+
 class FakeProcess:
-    def __init__(self, mismatch=False, approval=False, disconnect=False):
+    def __init__(self, mismatch=False, approval=False, disconnect=False, unloaded=False, on_start=None, busy=False):
         self.lines = queue.Queue()
         self.sent = []
         self.stdout = self
@@ -186,6 +219,9 @@ class FakeProcess:
         self.mismatch = mismatch
         self.approval = approval
         self.disconnect = disconnect
+        self.unloaded = unloaded
+        self.on_start = on_start
+        self.busy = busy
 
     def __iter__(self): return self
     def __next__(self):
@@ -199,9 +235,11 @@ class FakeProcess:
         if 'id' not in msg or 'method' not in msg: return
         method = msg['method']
         if method == 'initialize': result = {}
+        elif method == 'thread/loaded/list': result = {'data': [] if self.unloaded else ['existing'], 'nextCursor': None}
         elif method in ('thread/resume', 'thread/read'):
-            result = {'thread': {'id': 'wrong' if self.mismatch else 'existing', 'status': {'type': 'idle'}}}
+            result = {'thread': {'id': 'wrong' if self.mismatch else 'existing', 'status': {'type': 'active' if self.busy else 'idle'}}}
         elif method == 'turn/start':
+            if self.on_start: self.on_start()
             if self.approval:
                 self.lines.put({'id': 99, 'method': 'item/commandExecution/requestApproval', 'params': {}})
                 return
@@ -223,9 +261,15 @@ class FakeProcess:
 
 
 class ProtocolTests(EventTestCase):
+    def setUp(self):
+        super().setUp()
+        guard = patch.object(self.m, 'shared_socket', side_effect=lambda config: Path(config['control_socket']) if config.get('control_socket') else None)
+        guard.start()
+        self.addCleanup(guard.stop)
+
     def config(self):
         return {'cwd': str(ROOT), 'thread_id': 'existing', 'request_timeout': .2, 'turn_timeout': .2,
-                'state_path': str(self.root / 'state.json')}
+                'state_path': str(self.root / 'state.json'), 'control_socket': str(self.root / 'control.sock')}
 
     def test_same_thread_protocol_and_readonly_probe(self):
         process = FakeProcess()
@@ -236,15 +280,15 @@ class ProtocolTests(EventTestCase):
             adapter.close()
         self.assertEqual(accepted, ['turn-1'])
         methods = [m['method'] for m in process.sent]
-        self.assertEqual(methods, ['initialize', 'initialized', 'thread/resume', 'turn/start'])
-        self.assertTrue(process.sent[2]['params']['excludeTurns'])
-        self.assertEqual(process.sent[3]['params']['threadId'], 'existing')
-        popen.assert_called_once()
+        self.assertEqual(methods, ['initialize', 'initialized', 'thread/loaded/list', 'thread/resume', 'turn/start'])
+        self.assertTrue(process.sent[3]['params']['excludeTurns'])
+        self.assertEqual(process.sent[4]['params']['threadId'], 'existing')
+        self.assertEqual(popen.call_args.args[0][1:4], ['app-server', 'proxy', '--sock'])
         process = FakeProcess()
         adapter = self.m.AppServer(self.config(), popen=lambda *a, **k: process)
         self.assertTrue(adapter.probe()['readable'])
         adapter.close()
-        self.assertEqual([m['method'] for m in process.sent], ['initialize', 'initialized', 'thread/read'])
+        self.assertEqual([m['method'] for m in process.sent], ['initialize', 'initialized', 'thread/loaded/list', 'thread/read'])
 
     def test_mismatch_and_approval_fail_closed(self):
         for options in ({'mismatch': True}, {'approval': True}, {'disconnect': True}):
@@ -297,7 +341,10 @@ class ProtocolTests(EventTestCase):
         state_path.write_text(json.dumps({'schema': 1, 'repository': 'Caldis/Pir', 'lease': None,
                                           'lastRun': {'finishedAt': 990}}))
         self.assertEqual(self.m.dispatch(self.queue, self.config(), now=1000), 'lease_grace')
-        process = FakeProcess()
+        def record_finish():
+            batch = self.queue.status()['batches'][0]
+            state_path.write_text(json.dumps(self.finished_cycle(batch['id'], 1011)))
+        process = FakeProcess(on_start=record_finish)
         with patch.object(self.m.subprocess, 'Popen', return_value=process):
             self.assertEqual(self.m.dispatch(self.queue, self.config(), now=1010), 'completed')
         self.assertEqual(self.queue.status()['batches'][0]['turn'], 'turn-1')
@@ -305,6 +352,58 @@ class ProtocolTests(EventTestCase):
         self.assertIn('[12]', prompt)
         self.assertIn(self.queue.status()['batches'][0]['id'], prompt)
         self.assertNotIn('UNTRUSTED_PAYLOAD_INSTRUCTIONS', prompt)
+
+    def test_missing_shared_transport_never_claims_or_spawns(self):
+        self.receive()
+        with patch.object(self.m, 'shared_socket', return_value=None), patch.object(self.queue, 'claim') as claim:
+            self.assertEqual(self.m.dispatch(self.queue, self.config(), now=1000), 'transport_unavailable')
+            claim.assert_not_called()
+        self.assertEqual(self.queue.status()['pending'], 1)
+        with self.assertRaises(self.m.ProtocolError): self.m.AppServer(dict(self.config(), control_socket=None))
+
+    def test_temporary_probe_cannot_wake_and_never_reports_ready(self):
+        process = FakeProcess()
+        adapter = self.m.AppServer(self.config(), temporary_readonly=True, popen=lambda *a, **k: process)
+        self.assertFalse(adapter.probe()['wakeReady'])
+        with self.assertRaises(self.m.ProtocolError): adapter.wake('never', lambda x: None)
+        adapter.close()
+        self.assertNotIn('turn/start', [m.get('method') for m in process.sent])
+
+    def test_ownership_absence_never_claims(self):
+        self.receive()
+        process = FakeProcess(unloaded=True)
+        with patch.object(self.m.subprocess, 'Popen', return_value=process), patch.object(self.queue, 'claim') as claim:
+            self.assertEqual(self.m.dispatch(self.queue, self.config(), now=1000), 'transport_unavailable')
+            claim.assert_not_called()
+        self.assertNotIn('thread/resume', [m.get('method') for m in process.sent])
+
+    def test_completed_turn_without_finished_cycle_stays_unknown(self):
+        self.receive()
+        process = FakeProcess()
+        with patch.object(self.m.subprocess, 'Popen', return_value=process):
+            self.assertEqual(self.m.dispatch(self.queue, self.config(), now=1000), 'unknown')
+        batch = self.queue.status()['batches'][0]
+        self.assertEqual(batch['status'], 'unknown')
+        self.assertEqual(batch['turn'], 'turn-1')
+        proof = self.finished_cycle(batch['id'], 1001)
+        for bad in (dict(proof, lease={'id': 'busy'}), self.finished_cycle(batch['id'], 999),
+                    dict(proof, lastRun=dict(proof['lastRun'], note='unrelated')),
+                    dict(proof, lastRun=dict(proof['lastRun'], evidence=''))):
+            with self.assertRaises(ValueError): self.queue.acknowledge(batch['id'], bad)
+        self.queue.acknowledge(batch['id'], proof)
+        done = self.queue.status()['batches'][0]
+        self.assertEqual(done['status'], 'completed')
+        self.assertEqual(done['cycle_run'], 'cycle-1')
+        self.assertEqual(done['cycle_evidence'], '/private/cycle-evidence.json')
+
+    def test_affirmative_busy_before_turn_start_requeues_automatically(self):
+        self.receive()
+        process = FakeProcess(busy=True)
+        with patch.object(self.m.subprocess, 'Popen', return_value=process):
+            self.assertEqual(self.m.dispatch(self.queue, self.config(), now=1000), 'not_started')
+        self.assertEqual(self.queue.status()['pending'], 1)
+        self.assertNotIn('turn/start', [m.get('method') for m in process.sent])
+        self.assertEqual(self.queue.status()['batches'][0]['status'], 'retry')
 
     def test_protocol_timeout_is_bounded(self):
         process = FakeProcess()
