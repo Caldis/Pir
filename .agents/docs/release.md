@@ -221,3 +221,25 @@ Limited Review: 桌面工具截图覆盖应用窗口, 系统菜单栏的整体�
 | CI | 实施提交 [40624979001](https://github.com/Caldis/Pir/actions/runs/40624979001) 成功 |
 
 本机产物与公开回读位于 `dist/`, 完整检查日志为 `/tmp/pir-final-check.log`, 发布日志为 `/tmp/pir-local-release.log`. 原 MacBook 工作区未修改; 本轮更新资产在独立临时目录生成, Aqua 签名任务结束后移除. 本轮人工交互覆盖偏好页、版本读取与真实更新; 图片、文本、文件及会话恢复由现有测试覆盖, 未逐项重新进行手势验收.
+
+## 0.1.10 发行验收
+
+2026-10-28 完成正式发行，显示版本 0.1.10，构建号 20261028.2。PR #27 当前 head `cf62bb9c57e6a32a6167ec22800de6bb576f0399` 的 Check 成功并经独立审查；合并/构建源码为 `4eecc1dd9092babd85efffcb1466eefc2468f76a`，tag `0.1.10` 为 `f6f325a880c89d5cc51efa5e2d5ccfa812baf9b9`，两者仅有已签名 feed 元数据差异。
+
+| 范围 | 结果 |
+| --- | --- |
+| Issue #26 | 仅新剪贴板文本读取时 trim 首尾空白/换行，保留内部排版与原剪贴板；纯文本、RTF、全空白、编辑/恢复/再次贴上有失败后修复的回归 |
+| 检查与构建 | 130 Swift + 44 Python 测试、网站/本地化/shell 检查及 Universal 构建通过，最低 macOS 13、SDK 26.5 |
+| 应用公证 | 既有 Developer ID Application: BIAO CHEN，Team N7Z52F27XK；Apple Accepted `07c3545a-8737-4eb7-a58f-17e66330a090`，票据和 Gatekeeper 通过 |
+| DMG 公证 | Apple Accepted `be90d1df-15a4-475c-a168-526740e61b26`，签名、票据、镜像验证通过 |
+| Sparkle | 复用 MacBook `me.caldis.pir` 原密钥，一次性 Aqua 签名任务成功，ZIP/feed 独立 Ed25519 验签通过 |
+| 公开发行 | [0.1.10](https://github.com/Caldis/Pir/releases/tag/0.1.10) 的 DMG、ZIP、SHA256SUMS 已回读；update-feed 保持 prerelease；`verify-public.py --version 0.1.10 --build 20261028.2 --compare-feed` exit 0 |
+| 真实更新 | 独立测试 HOME 中的公开 0.1.9 / 20261028.1 通过 Sparkle 检查、下载、安装并重启为 0.1.10 / 20261028.2；再次检查显示最新版 |
+| 安装与持久化 | 安装后的 118 个常规文件与公开签名 ZIP 一致，严格验签/票据/Gatekeeper 通过；两项隔离文本贴图的 4 个文件升级前后 SHA256 完全一致，覆盖已有首尾空白、空文本、隐藏状态、尺寸和位置 |
+| 维护试点 | 稳定协调会话持 lease，隔离 worker 返回结构化交接，独立只读审查；精简状态与私有运行 journal 收尾。调度配置由调度方管理，提示和记录不跟踪频率 |
+
+DMG SHA256 `648408d5283c9d73910ef7cf1a9512d64ed33fb0c379d15e04745e0eee422381`；ZIP SHA256 `992013a0dbfd8f3af13a75f07e5ed0e6842cd0eaa993ee5583d081212e9f2e9a`。
+
+证据位于 `dist/maintenance/abf4ed5e34eb4550a56c794fb9b37823/`，公开下载位于 `dist/public-verification/0.1.10/`，隔离升级应用和合成贴图位于 `~/.config/pir/maintenance/fixtures/abf4ed5e34eb4550a56c794fb9b37823/`。执行 worktree 的交接/日志已复制后归档，原剪贴板已恢复并移除临时私有快照；用户贴图未读取或覆盖。
+
+Limited Review: 可见桌面工具能将组合键输入录制控件，但未触发 Carbon 全局贴屏；新建文本、编辑、恢复和再次贴上的应用交互由真实 NSPasteboard/NSPanel/NSTextView 集成回归覆盖。真实 Sparkle 升级通过可见界面完成；本轮未逐一重做图片/文件鼠标手势，已有回归通过。网站构建保留既有 Vite bundle-size advisory。
