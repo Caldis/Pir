@@ -162,6 +162,53 @@ class MaintenanceTests(unittest.TestCase):
         self.assertEqual(item['resumePhase'], 'merged')
         self.assertEqual(item['release'], '0.1.10')
 
+    def test_stage_scan_checks_only_marked_issues_and_never_intakes_child_as_root(self):
+        root = {'taskSlug': 'project-root', 'itemId': 'ROOT_ITEM', 'content': {
+            '__typename': 'Issue', 'id': 'ROOT_NODE', 'url': 'https://github.com/Caldis/Pir/issues/33',
+            'repository': {'nameWithOwner': 'Caldis/Pir'}, 'body': ''}, 'stageMarker': None}
+        marker = '<!-- pir-maintainer:project-stage:project-root:review -->'
+        opened = [{'number': number, 'title': 'Work', 'body': body, 'labels': [],
+            'state': 'open', 'html_url': f'https://github.com/Caldis/Pir/issues/{number}'}
+            for number, body in [(33, ''), (34, marker), (35, marker), (36, '')]]
+        calls = []
+        def api(endpoint, method='GET', data=None):
+            calls.append(endpoint)
+            if endpoint == 'user': return {'login': 'Caldis'}
+            if 'state=open' in endpoint: return opened
+            if endpoint.endswith('/parent'):
+                return {'node_id': 'ROOT_NODE' if '/34/' in endpoint else 'FOREIGN',
+                        'html_url': 'https://github.com/Caldis/Pir/issues/33'}
+            if '/comments' in endpoint: return []
+            self.fail(endpoint)
+        with patch.object(self.m, 'gh_api', api), patch.object(self.m, 'project_snapshot', return_value={'items': [root]}) as snapshot:
+            result = self.m.scan(self.store)
+        actions = {i['number']: i for i in result['issues']}
+        self.assertEqual(actions[33]['action'], 'new')
+        self.assertEqual(actions[34]['action'], 'stage')
+        self.assertEqual(actions[34]['stageRoot']['taskSlug'], 'project-root')
+        self.assertEqual(actions[35]['action'], 'blocked')
+        self.assertEqual(actions[36]['action'], 'new')
+        self.assertEqual(len([x for x in calls if x.endswith('/parent')]), 2)
+        snapshot.assert_called_once()
+        self.assertFalse(self.store.path.exists())
+
+    def test_marked_issue_missing_parent_or_project_access_is_not_silently_skipped(self):
+        opened = [{'number': 34, 'title': 'Task', 'body': '<!-- pir-maintainer:project-stage:project-root:review -->',
+                   'labels': [], 'state': 'open', 'html_url': 'https://github.com/Caldis/Pir/issues/34'}]
+        def api(endpoint, method='GET', data=None):
+            if endpoint == 'user': return {'login': 'Caldis'}
+            if 'state=open' in endpoint: return opened
+            if '/comments' in endpoint: return []
+            raise RuntimeError('read denied')
+        opened.append({'number': 36, 'title': 'Owner task', 'body': '', 'labels': [],
+                       'state': 'open', 'html_url': 'https://github.com/Caldis/Pir/issues/36'})
+        with patch.object(self.m, 'gh_api', api), patch.object(self.m, 'project_snapshot', side_effect=RuntimeError('read denied')):
+            result = self.m.scan(self.store)
+        self.assertEqual(result['issues'][0]['action'], 'blocked')
+        self.assertEqual(result['issues'][0]['skipReason'], 'stage-linkage-unverified')
+        self.assertIn('sourceError', result['issues'][0])
+        self.assertEqual(result['issues'][1]['action'], 'new')
+
     def test_scan_includes_closed_blocked_issues(self):
         run = self.store.begin(now=100, ttl=120)
         self.store.checkpoint(run['id'], 39, {'phase': 'blocked', 'fingerprint': 'x'}, now=101)
