@@ -189,7 +189,7 @@ def draft_stage_linkage(marker, body, roots, values):
     if root and root.get('itemURL'):
         valid_links.add(root['itemURL'] + ' | ' + root['itemId'])
     verified = (not marker.get('ambiguous') and len(parents) == 1 and root is not None
-        and len(linked) <= 1 and all(link in valid_links for link in linked)
+        and len(linked) == 1 and all(link in valid_links for link in linked)
         and parents[0] == root['itemId'] and not root.get('stageMarker')
         and isinstance(content, dict) and (content.get('__typename') == 'DraftIssue'
             or (content.get('__typename') == 'Issue'

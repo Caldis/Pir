@@ -159,6 +159,8 @@ class ProjectsTests(unittest.TestCase):
         root, stage = item('root', 'DraftIssue'), item('stage', 'DraftIssue')
         slug = self.m.task_slug(metadata()['id'], 'root')
         stage['content']['body'] = f'<!-- pir-maintainer:project-stage:{slug}:implementation -->\nParent item: root'
+        stage['fieldValues'] = connection([{'__typename': 'ProjectV2ItemFieldTextValue',
+            'id': 'PARENT_VALUE', 'field': {'id': 'PARENT_FIELD', 'name': 'Parent item'}, 'text': 'root'}])
         result = self.scan([stage, root])
         self.assertEqual(result['items'][0]['action'], 'stage')
         self.assertEqual(result['items'][0]['stageRoot']['itemId'], 'root')
@@ -177,6 +179,9 @@ class ProjectsTests(unittest.TestCase):
                   'field': {'id': 'PARENT_FIELD', 'name': 'Parent item'}, 'text': 'foreign'}
         stage['fieldValues'] = connection([parent])
         self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'blocked')
+        stage['fieldValues'] = connection([])
+        self.assertEqual(self.scan([root, stage])['items'][1]['action'], 'blocked')
+        stage['fieldValues'] = connection([parent])
         parent['text'] = 'https://github.com/users/Caldis/projects/7?pane=issue&itemId=286166724'
         result = self.scan([root, stage])
         self.assertEqual(result['items'][1]['action'], 'stage')
