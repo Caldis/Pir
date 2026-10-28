@@ -24,7 +24,6 @@ class MaintenanceTests(unittest.TestCase):
         self.auth = auth.start().return_value
         self.addCleanup(auth.stop)
         self.auth.environment.return_value = {'GH_TOKEN': 'offline-fixture'}
-        self.auth.actor.return_value = 'caldis-pir-maintainer[bot]'
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.store = self.m.Store(Path(self.directory.name))
@@ -110,34 +109,71 @@ class MaintenanceTests(unittest.TestCase):
     def test_own_comments_do_not_retrigger_but_reporter_edits_do(self):
         issue = {'number': 39, 'title': 'Resize', 'body': 'Wrong size', 'labels': []}
         comments = [{'body': 'Reproduction', 'user': {'login': 'reporter'}}]
-        before = self.m.fingerprint(issue, comments, 'Caldis')
+        before = self.m.fingerprint(issue, comments)
         comments.append({'body': '<!-- pir-maintainer:39:triage -->\nWorking', 'user': {'login': 'Caldis'}})
-        self.assertEqual(before, self.m.fingerprint(issue, comments, 'Caldis'))
+        self.assertEqual(before, self.m.fingerprint(issue, comments))
         comments[0]['body'] = 'New reproduction'
-        self.assertNotEqual(before, self.m.fingerprint(issue, comments, 'Caldis'))
+        self.assertNotEqual(before, self.m.fingerprint(issue, comments))
 
     def test_marker_from_another_author_does_not_hide_new_input(self):
         issue = {'number': 39, 'title': 'Resize', 'body': '', 'labels': []}
-        before = self.m.fingerprint(issue, [], 'Caldis')
+        before = self.m.fingerprint(issue, [])
         comments = [{'body': '<!-- pir-maintainer:39:triage --> changed', 'user': {'login': 'reporter'}}]
-        self.assertNotEqual(before, self.m.fingerprint(issue, comments, 'Caldis'))
+        self.assertNotEqual(before, self.m.fingerprint(issue, comments))
 
     def test_upsert_reuses_own_comment_and_ignores_foreign_marker(self):
         marker = '<!-- pir-maintainer:39:triage -->'
         comments = [{'id': 2, 'body': marker + '\nforeign', 'user': {'login': 'reporter'}},
-                    {'id': 3, 'body': marker + '\nold', 'user': {'login': 'Caldis'}}]
+                    {'id': 3, 'body': marker + '\nold', 'user': {'login': 'pir-maintainer[bot]', 'id': 349413745}}]
         calls = []
         def api(endpoint, method='GET', data=None):
             calls.append((endpoint, method, data))
             if method == 'GET': return comments
             return {'id': 3}
-        self.m.upsert_comment(api, 39, 'triage', 'new', 'Caldis')
+        self.m.upsert_comment(api, 39, 'triage', 'new')
         self.assertEqual(calls[-1][0], 'repos/Caldis/Pir/issues/comments/3')
         self.assertEqual(calls[-1][1], 'PATCH')
         comments[1]['body'] = marker + '\nnew'
         calls.clear()
-        self.m.upsert_comment(api, 39, 'triage', 'new', 'Caldis')
+        self.m.upsert_comment(api, 39, 'triage', 'new')
         self.assertEqual(len(calls), 1)
+
+    def test_renamed_bot_marker_preserves_fingerprint_and_reuses_historical_comment(self):
+        issue = {'number': 39, 'title': 'Resize', 'body': '', 'labels': []}
+        marker = '<!-- pir-maintainer:39:triage -->'
+        historical = {'id': 3, 'body': marker + '\nold',
+                      'user': {'id': 349413745, 'login': 'caldis-pir-maintainer[bot]'}}
+        comments = [historical]
+        before = self.m.fingerprint(issue, [])
+        self.assertEqual(before, self.m.fingerprint(issue, comments))
+        historical['user']['login'] = 'pir-maintainer[bot]'
+        self.assertEqual(before, self.m.fingerprint(issue, comments))
+        historical['user']['login'] = 'caldis-pir-maintainer[bot]'
+        # Even a newer matching marker with the current login cannot claim ownership.
+        comments.extend([{'id': 4, 'body': marker + '\nowner', 'user': {'id': 1499953, 'login': 'Caldis'}},
+                         {'id': 5, 'body': marker + '\nforeign', 'user': {'id': 999, 'login': 'pir-maintainer[bot]'}}])
+        calls = []
+        def api(endpoint, method='GET', data=None):
+            calls.append((endpoint, method, data))
+            return comments if method == 'GET' else {'id': 3}
+        self.m.upsert_comment(api, 39, 'triage', 'new')
+        self.assertEqual(calls[-1][:2], ('repos/Caldis/Pir/issues/comments/3', 'PATCH'))
+        self.assertEqual(comments[1]['body'], marker + '\nowner')
+        self.assertEqual(comments[2]['body'], marker + '\nforeign')
+        self.assertNotEqual(before, self.m.fingerprint(issue, comments))
+
+    def test_current_bot_login_without_matching_id_cannot_hide_or_edit_input(self):
+        issue = {'number': 39, 'title': 'Resize', 'body': '', 'labels': []}
+        marker = '<!-- pir-maintainer:39:triage -->'
+        for user in ({'login': 'pir-maintainer[bot]'}, {'login': 'pir-maintainer[bot]', 'id': 999}):
+            comments = [{'id': 2, 'body': marker + '\nforeign', 'user': user}]
+            self.assertNotEqual(self.m.fingerprint(issue, []), self.m.fingerprint(issue, comments))
+            calls = []
+            def api(endpoint, method='GET', data=None):
+                calls.append((endpoint, method))
+                return comments if method == 'GET' else {'id': 3}
+            self.m.upsert_comment(api, 39, 'triage', 'new')
+            self.assertEqual(calls[-1][1], 'POST')
 
     def test_resume_action_is_not_hidden_when_issue_was_closed_on_merge(self):
         self.assertEqual(self.m.action({'phase': 'merged', 'fingerprint': 'x'}, 'x'), 'resume')
@@ -233,7 +269,7 @@ class MaintenanceTests(unittest.TestCase):
             if method == 'GET': return []
             return self.store.mutate(run['id'], lambda: writes.append(data), now=300)
         with self.assertRaises(self.m.Busy):
-            self.m.upsert_comment(api, 39, 'triage', 'hello', 'Caldis')
+            self.m.upsert_comment(api, 39, 'triage', 'hello')
         self.assertEqual(writes, [])
 
     def test_changed_input_on_blocked_merged_release_resumes_existing_work(self):
@@ -370,7 +406,7 @@ class MaintenanceTests(unittest.TestCase):
 
 
 class AppIdentityIntegrationTests(unittest.TestCase):
-    def test_scan_resolves_bot_without_user_endpoint_and_preserves_legacy_comments(self):
+    def test_scan_and_comment_migration_preserve_legacy_owner_comments(self):
         m = module()
         with tempfile.TemporaryDirectory() as directory:
             store = m.Store(Path(directory))
@@ -380,20 +416,19 @@ class AppIdentityIntegrationTests(unittest.TestCase):
                 if 'state=open' in endpoint:
                     return [{'number': 1, 'title': 'Owner request', 'body': '', 'labels': [], 'state': 'open', 'html_url': 'https://github.com/Caldis/Pir/issues/1'}]
                 return []
-            with patch.object(m, 'app_client') as auth, patch.object(m, 'gh_api', side_effect=api):
-                auth.return_value.actor.return_value = 'caldis-pir-maintainer[bot]'
+            with patch.object(m, 'gh_api', side_effect=api):
                 result = m.scan(store)
             self.assertEqual(result['issues'][0]['number'], 1)
             self.assertNotIn('user', endpoints)
             legacy = [{'id': 3, 'user': {'login': 'Caldis'}, 'body': '<!-- pir-maintainer:1:triage -->\nOld'}]
             issue = {'number': 1, 'title': 'Owner request', 'body': '', 'labels': []}
-            self.assertEqual(m.fingerprint(issue, legacy, 'caldis-pir-maintainer[bot]'), m.fingerprint(issue, legacy, 'Caldis'))
+            self.assertEqual(m.fingerprint(issue, legacy), m.fingerprint(issue, []))
             writes = []
             def comments(endpoint, method='GET', data=None):
                 if method == 'GET': return legacy
                 writes.append((endpoint, method, data))
                 return {'id': 4}
-            m.upsert_comment(comments, 1, 'triage', 'Current bot status', 'caldis-pir-maintainer[bot]')
+            m.upsert_comment(comments, 1, 'triage', 'Current bot status')
             self.assertEqual(writes[0][1], 'POST')
             self.assertEqual(legacy[0]['body'], '<!-- pir-maintainer:1:triage -->\nOld')
 

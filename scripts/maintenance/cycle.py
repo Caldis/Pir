@@ -176,12 +176,14 @@ class Store:
         return result
 
 
-def fingerprint(issue, comments, viewer):
+def fingerprint(issue, comments):
     marker = f'<!-- pir-maintainer:{issue["number"]}:'
     content = {'title': issue.get('title'), 'body': issue.get('body'),
                'labels': sorted(x['name'] for x in issue.get('labels', [])),
                'comments': [(c.get('user', {}).get('login'), c.get('body')) for c in comments
-                            if not (c.get('user', {}).get('login') in (viewer, 'Caldis') and c.get('body', '').startswith(marker))]}
+                            if not ((c.get('user', {}).get('id') == _auth.BOT_USER_ID
+                                     or c.get('user', {}).get('login') == 'Caldis')
+                                    and c.get('body', '').startswith(marker))]}
     return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -209,12 +211,12 @@ def gh_api(endpoint, method='GET', data=None):
     return response
 
 
-def upsert_comment(api, number, phase, text, viewer):
+def upsert_comment(api, number, phase, text):
     marker = f'<!-- pir-maintainer:{number}:{phase} -->'
     body = marker + '\n' + text.strip()
     endpoint = f'repos/{REPO}/issues/{number}/comments'
     comments = api(endpoint)
-    existing = next((c for c in reversed(comments) if c.get('user', {}).get('login') == viewer
+    existing = next((c for c in reversed(comments) if c.get('user', {}).get('id') == _auth.BOT_USER_ID
                      and c.get('body', '').startswith(marker)), None)
     if existing and existing['body'] == body: return {'unchanged': True, 'id': existing['id']}
     if existing: return api(f'repos/{REPO}/issues/comments/{existing["id"]}', 'PATCH', {'body': body})
@@ -234,7 +236,6 @@ def project_snapshot():
 
 def scan(store):
     state = store.read()
-    viewer = app_client().actor()
     opened = gh_api(f'repos/{REPO}/issues?state=open&per_page=100')
     issues = {str(x['number']): x for x in opened if 'pull_request' not in x}
     # A merge may have auto-closed an issue before a crashed release completed.
@@ -247,7 +248,7 @@ def scan(store):
     source_error = None
     for number, issue in issues.items():
         comments = gh_api(f'repos/{REPO}/issues/{number}/comments?per_page=100')
-        digest = fingerprint(issue, comments, viewer)
+        digest = fingerprint(issue, comments)
         previous = state['issues'].get(number, {})
         entry = {'number': issue['number'], 'title': issue['title'], 'url': issue['html_url'],
                  'state': issue['state'], 'fingerprint': digest,
@@ -339,12 +340,11 @@ def main():
         store.guard(args.run_id)
         if args.dry_run: result = {'dryRun': True, 'body': args.body_file.read_text()}
         else:
-            viewer = app_client().actor()
             store.guard(args.run_id)
             def guarded_api(endpoint, method='GET', data=None):
                 if method == 'GET': return gh_api(endpoint)
                 return store.mutate(args.run_id, lambda: gh_api(endpoint, method, data))
-            result = upsert_comment(guarded_api, args.issue, args.phase, args.body_file.read_text(), viewer)
+            result = upsert_comment(guarded_api, args.issue, args.phase, args.body_file.read_text())
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

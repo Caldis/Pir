@@ -15,7 +15,7 @@ On an explicit request to **start scheduled maintenance**, create or update **on
 
 ## GitHub identity
 
-All maintenance issue/PR/repository/Project mutations use only the native `caldis-pir-maintainer[bot]` installation identity. Read [references/github-identity.md](references/github-identity.md) before any GitHub operation. Use `github_app.py run -- gh ...` / `run -- git ...` for authenticated commands; cycle.py/projects.py enforce this internally. Missing credentials or unavailable Project #7 access fail closed: no owner token, connector, machine user or personal routing. Preserve legacy owner comments without editing them. During this explicitly authorized bootstrap, keep stage checkpoints local while Project App access remains unproven; do not fabricate remote drafts or create repository stage issues. Any Project migration requires the owner's separate decision.
+All maintenance issue/PR/repository/Project mutations use only the native `pir-maintainer[bot]` installation identity. Read [references/github-identity.md](references/github-identity.md) before any GitHub operation. Use `github_app.py run -- gh ...` / `run -- git ...` for authenticated commands; cycle.py/projects.py enforce this internally. Missing credentials or unavailable Project #7 access fail closed: no owner token, connector, machine user or personal routing. Preserve legacy owner comments without editing them. During this explicitly authorized bootstrap, keep stage checkpoints local while Project App access remains unproven; do not fabricate remote drafts or create repository stage issues. Any Project migration requires the owner's separate decision.
 
 ## Execution and handoff
 
