@@ -1,58 +1,79 @@
-# Pir
+<p align="center">
+  <img src="assets/brand/app-icon.png" width="128" height="128" alt="Pir app icon">
+</p>
 
-一个快捷键, 图片、文字与文件留在屏幕上
+<h1 align="center">Pir</h1>
 
-Pir 是 macOS 菜单栏应用, 支持剪贴板图片、文本与文件贴屏. 每项内容以独立无边框窗口置顶显示, 支持移动、缩放与关闭
+<p align="center">Copy it. Keep it in sight.</p>
 
-[官网](https://caldis.github.io/Pir/) · [下载](https://github.com/Caldis/Pir/releases/latest)
+<p align="center">
+  <a href="https://caldis.github.io/Pir/">Website</a> ·
+  <a href="https://github.com/Caldis/Pir/releases/latest">Download</a>
+</p>
 
-## 使用
+<p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
 
-1. 下载磁盘镜像, 拖动 Pir 到 Applications
-2. 启动 Pir, 复制图片、文字或文件
-3. 按 `⇧⌘V` 贴出内容
-4. 拖动浮窗调整位置, 从边缘调整大小, 悬停后使用左上角控件关闭、复原、切换图片显示模式或复制
+Pir is a native macOS menu bar app that keeps clipboard images, editable text, and file references in always-on-top, borderless windows. Move and resize each pin to keep what you need within reach.
 
-文本支持框选、编辑与复制, 修改随应用重启恢复. 拖动顶部留白移动文本窗口, 从边缘调整大小. 背景和文字颜色跟随 macOS 明暗主题
+## Features
 
-在 Finder 中复制文件或文件夹后, 按热键创建文件浮窗. 支持图标与列表切换、相交框选、多选、双击打开及拖到 Finder. 文件浮窗提供关闭和复原控件
+### Images
 
-文件右键菜单提供打开、移到废纸篓、显示简介、重命名、在 Finder 中显示与从列表移除. 显示简介打开 Pir 的原生文件信息窗口, 字段支持选择与复制. 多文件重命名采用编号并保留扩展名; 重命名和移到废纸篓同步更新各浮窗引用, 包含目录内部文件. 从列表移除只清理浮窗引用, 源文件保留
+- Pin images from your clipboard, including transparent images and Retina screenshots with their logical display size preserved.
+- Switch between filling the window with a crop and fitting the whole image. The window keeps its size and position; your display mode is saved and carried over when you pin it again.
+- Copy the original image from the floating window.
 
-图片默认裁剪填满窗口, 左上角显示模式按钮可切换完整等比显示. 切换时窗口尺寸与位置保持当前状态, 模式随应用重启恢复, 再次贴上保留当前模式. Retina 截图保留逻辑显示尺寸, 图片复制使用原始内容
+### Text
 
-图片控件从左到右为关闭、复原、显示模式和复制; 文本控件为关闭、复原和复制. 复制成功后按钮短暂显示勾号, 随后恢复复制图标
+- Select, edit, and copy text directly in a pin. Edits are restored when Pir restarts.
+- Drag the space at the top to move the window, or hold `Option` while dragging the text. Resize from the edges; narrow windows wrap text and scroll vertically.
+- Text and background colors follow the macOS appearance. New pins trim leading and trailing whitespace without changing your clipboard or internal formatting.
 
-应用重启后恢复贴屏内容、尺寸与位置, 多显示器位置按屏幕归属保存
+### Files
 
-贴屏会话保存在本机 `~/.config/pir/`, 用户关闭浮窗时清理对应数据
+- Copy files or folders in Finder, then pin them as references with native icons or a list view.
+- Select by dragging a selection rectangle, toggle items with `Command`, add to a selection with `Shift`, double-click to open, or drag files to Finder.
+- Right-click to open, move to Trash, get info, rename, reveal in Finder, or remove from the list. Get Info opens Pir's native file information windows with selectable, copyable fields. Batch renaming numbers files and preserves extensions.
 
-## 偏好设置
+**File actions affect the original files.** Renaming and moving to Trash update references across pins, including files inside affected folders. Only successfully trashed items and their descendant references are removed. **Remove from List** removes only the pin's references and keeps the original files; removing the last item closes the pin.
 
-点击菜单栏图标, 选择偏好设置. 贴屏页面列出全部浮窗, 支持再次贴上、隐藏、显示、删除与清空全部, 隐藏状态随应用重启恢复
+## Get started
 
-首次启动显示 Logo 入门动画. 点击快捷键区域可录制组合键, 按下快捷键即可试贴 Logo, 并观看屏幕随机烟花. 快捷键触发与窗口内录制均免辅助功能权限
+Requires **macOS 13 or later**, on Apple Silicon or Intel Macs.
 
-完成入门后, 常规启动保持静默. 应用运行时再次打开 Pir 可显示偏好设置; 隐藏菜单栏图标后再次启动也可恢复入口. 默认快捷键为 `⇧⌘V`, 已保存的自定义组合键继续生效
+1. [Download the latest disk image](https://github.com/Caldis/Pir/releases/latest) and drag Pir into Applications.
+2. Open Pir and complete the welcome screen. You can record a shortcut and try pinning the Pir logo there.
+3. Copy an image, text, or files, then press **`⇧⌘V`** (`Shift` + `Command` + `V`) to pin the content. A saved custom shortcut continues to work.
+4. Drag a pin to move it and use its edges to resize. Hover over it to reveal the controls in the upper-left corner.
 
-| 设置 | 功能 |
+| Pin | Controls, from left to right |
 | --- | --- |
-| 开机启动 | 登录 macOS 时启动 Pir |
-| 隐藏图标 | 隐藏菜单栏图标; 再次启动 Pir 可打开偏好设置 |
-| 热键 | 录制贴出内容的全局快捷键 |
+| Image | Close, restore size, display mode, copy |
+| Text | Close, restore size, copy |
+| Files | Close, restore size |
 
-在偏好设置的「更新」页面可手动检查新版本, 也可开启启动时检查更新.
+The copy button briefly shows a checkmark after a successful copy. Global shortcuts and shortcut recording require no Accessibility permission.
 
-## 系统要求
+## Preferences and recovery
 
-macOS 13 或更新版本, 支持 Apple Silicon 与 Intel Mac
+Click the menu bar icon and choose **Preferences**. The four tabs are General, Pins, Updates, and About.
 
-## 开发
+| General setting | What it does |
+| --- | --- |
+| Launch at login | Starts Pir when you log in to macOS |
+| Hide menu bar icon | Hides the icon; open Pir again to access Preferences |
+| Shortcut | Records or clears the global shortcut used to pin content |
 
-维护入口为 [AGENTS.md](AGENTS.md), 架构见 [docs/architecture.md](docs/architecture.md), 构建与发布见 [.agents/docs/release.md](.agents/docs/release.md)
+The **Pins** tab lists all pins and lets you pin them again, show, hide, delete, or clear all after confirmation. Hidden states persist across restarts. Pir restores pin content, sizes, and positions on restart, with placement saved for each display.
 
-## 许可
+After onboarding, regular launches stay quiet. Open Pir again while it is running to show Preferences, including when its menu bar icon is hidden. In **Updates**, you can check manually or enable checks at startup. Updates come from Pir's GitHub Releases through Sparkle.
 
-Pir Source License 1.0. 允许使用、修改与共享源码, 第三方在应用商店分发同类应用需要作者书面授权. 作者保留官方发行与 Mac App Store 上架权利
+## Local storage and privacy
 
-此许可属于源码可用许可, 来源与第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+Pir reads the clipboard when you trigger it. Pin sessions are stored locally in `~/.config/pir/`; closing a pin removes its saved record. File pins retain file URL references. Closing a file pin or removing a reference does not delete the original file; **Move to Trash** acts on the original file.
+
+## License
+
+Pir uses the [Pir Source License 1.0](LICENSE), a **source-available** license. It permits use, copying, modification, and distribution, including selling copies, subject to its terms. Copies must retain the license and copyright notice; modified distributions must identify their changes and must not present themselves as official Pir releases.
+
+Distributing a covered application through an application marketplace, free or paid, requires separate written permission from Caldis / BIAO CHEN. The license defines covered applications and marketplaces; the copyright holder retains their own distribution rights. This is **not the MIT License or an OSI-approved open source license**. Third-party components keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
