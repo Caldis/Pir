@@ -1,4 +1,4 @@
-在 /Users/caldis/Code/Pir 工作，先读取 AGENTS.md 和 .agents/skills/pir-maintainer/SKILL.md，并遵循当前仓库版本。
+在当前 Pir 项目检出目录工作，先读取 AGENTS.md 和 .agents/skills/pir-maintainer/SKILL.md，并遵循当前仓库版本。
 
 这是用户授权的 Caldis/Pir 定时维护任务：扫描全部 GitHub open issues、https://github.com/users/Caldis/projects/7 的全部 item 和未完成的本地检查点，优先恢复已有 PR/合并/发布。对可明确复现的问题实施最小修复，回复 issue，发起 PR，在当前 head 的 CI 与审查通过后合并，构建、使用已有本地 Developer ID 签名、公证、推送并正式发布；用原 Pir Sparkle 密钥签名更新，验证公开下载与真实升级后回复完成并关闭 issue。不要因为这些已授权步骤重复索要许可。需要用户输入的产品决策或系统认证才明确报告阻塞。
 
@@ -14,4 +14,6 @@
 
 按 references/projects.md 同时运行 cycle.py scan 与 projects.py；以 Project item 为任务单位，按 item ID 去重并关联已有 issue/PR/发布检查点。每次有边界阶段委派前，由主会话代子代理创建或复用同一 Project 中的草稿阶段条目，通过 Parent item 字段与正文链接父 item；不新建仓库 issue，不把草稿转换成 issue；子代理交接携带父/子 item、阶段和证据，主会话及时同步开始、进展、阻塞和完成状态。草稿保持草稿，生成的阶段条目须核对父 item 关联且不再作为根任务领取；维护各字段的真实值与来源，关联现有 issue、PR、发布、验收和证据，原生只读字段不伪造，优先级/估时/截止时间无依据时不编造。父 item 在真实发布升级验证通过后才 Done；文档/工具变更以审查/CI/合并及无需发版证据完成。Project 权限故障明确记录，不能当成空项目；同步失败仅恢复同步，不重做修复或发布。
 
-身份路由：issue、PR、仓库与发布操作使用 pir-maintainer[bot]；Project #7 的读取与同步按用户明确授权使用主帐号 Caldis，通过独立 Project runner 验证身份，不修改全局 gh 登录。Project 同步失败保留本地待同步状态，继续可独立推进的 issue/发布工作；验收完成的 issue 不因看板同步故障而长期保持打开。敏感信息审查结果仅保留私有报告和本会话，未经用户明确要求不对外同步。
+身份路由：issue、PR、仓库与发布操作使用 pir-maintainer[bot]；Project #7 的读取与同步按用户明确授权使用主帐号 Caldis，通过独立 Project runner 验证身份，不修改全局 gh 登录。Project 同步失败保留本地待同步状态，继续可独立推进的 issue/发布工作；验收完成的 issue 不因看板同步故障而长期保持打开。本机配置与私有日志不复制到外部消息。
+
+按 references/local-environment.md 使用仓库外 local.env；缺失时执行有边界的发现和初始化，不能确定的必填值一次性询问用户。只有确实依赖这些值的发布阶段等待输入；普通 issue 开发、检查和文档任务继续推进。保持既有签名密钥和公开验收门槛。

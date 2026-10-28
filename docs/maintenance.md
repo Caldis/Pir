@@ -4,7 +4,7 @@
 
 ## 接手顺序
 
-1. 阅读 AGENTS.md 与 .agents/INDEX.md, 确认工作目录为 /Users/caldis/Code/pir
+1. 阅读 AGENTS.md 与 .agents/INDEX.md, 确认当前目录为 Pir 项目检出目录
 2. 执行下列只读命令, 确认仓库身份、分支、已有改动和安装版本
 3. 按维护索引读取相关源码和测试, 先复现问题再修改
 4. 使用针对性验证确认修改, 发布前再执行完整检查与交互验收
@@ -133,8 +133,13 @@ Pir 的基础热键功能使用系统组合键注册与应用窗口内录制. �
 
 ## 2026-10-28 本地开发与签名排查
 
-Mac mini 开发目录为 `~/Code/Pir`. Xcode 26.6 / Swift 6.3.3 / SDK 26.5 已通过 Universal 构建, `scripts/dev.sh` 启动后更新页显示 0.1.9 / 20261028.1. `scripts/check.sh` 通过 128 项 Swift 测试、6 项 Python 发布工具测试、本地化、网站和脚本检查. 缩放光标测试使用隔离的合成事件队列, 保留原有精确尺寸与光标断言, 避免 AppKit 在真实队列中转换合成坐标.
+构建主机 开发目录为 `项目检出目录`. Xcode 26.6 / Swift 6.3.3 / SDK 26.5 已通过 Universal 构建, `scripts/dev.sh` 启动后更新页显示 0.1.9 / 20261028.1. `scripts/check.sh` 通过 128 项 Swift 测试、6 项 Python 发布工具测试、本地化、网站和脚本检查. 缩放光标测试使用隔离的合成事件队列, 保留原有精确尺寸与光标断言, 避免 AppKit 在真实队列中转换合成坐标.
 
-Developer ID 证书、配对私钥与 P12 一直位于 Mac mini 的 `~/Docs/ci-signing/keys/`, 说明位于 `~/Docs/ci-signing/github-macos-codesign.md`. 单独看到证书而 `security find-identity` 未列出可用身份, 应继续检查配对私钥与钥匙串加载状态. 本轮已将配对材料导入 login Keychain; 发行实际使用临时钥匙串加载同一套本地材料, 完成后恢复搜索列表并清理临时钥匙串. OpenSSL 3 打包给 macOS 导入的临时 P12 使用 `-legacy`, 随机口令不写入仓库或日志. Developer ID 签名、应用与 DMG 公证均已验证.
+Developer ID 证书、配对私钥与 P12 一直位于 构建主机 的 `${PIR_SIGNING_DIR}/`, 说明位于 `${PIR_SIGNING_GUIDE}`. 单独看到证书而 `security find-identity` 未列出可用身份, 应继续检查配对私钥与钥匙串加载状态. 本轮已将配对材料导入 login Keychain; 发行实际使用临时钥匙串加载同一套本地材料, 完成后恢复搜索列表并清理临时钥匙串. OpenSSL 3 打包给 macOS 导入的临时 P12 使用 `-legacy`, 随机口令不写入仓库或日志. Developer ID 签名、应用与 DMG 公证均已验证.
 
-Pir 的 Sparkle 更新密钥与 Developer ID 分开管理. 原有账号 `me.caldis.pir` 位于 SSH 主机 `macbook` 的 login Keychain, 公钥与本仓库 Info.plist 匹配. 当前 Mac mini 未配置这把更新密钥, 不应据此认定原密钥不存在. 普通 SSH 调用可能被系统拒绝访问钥匙串, 本轮在 MacBook 的 Aqua 用户会话运行原有 Sparkle 工具, 用独立临时目录处理本机已公证应用, 私钥与原项目工作区保留原处. 后续继续使用该机器签名, 或在明确迁移密钥后核对两机公钥; 不得重新生成或替换发布公钥.
+Pir 的 Sparkle 更新密钥与 Developer ID 分开管理. 原有账号 `${PIR_SPARKLE_ACCOUNT}` 位于 更新签名主机 `${PIR_SPARKLE_HOST}` 的 login Keychain, 公钥与本仓库 Info.plist 匹配. 当前 构建主机 未配置这把更新密钥, 不应据此认定原密钥不存在. 普通 SSH 调用可能被系统拒绝访问钥匙串, 本轮在 更新签名主机 的 Aqua 用户会话运行原有 Sparkle 工具, 用独立临时目录处理本机已公证应用, 私钥与原项目工作区保留原处. 后续继续使用该机器签名, 或在明确迁移密钥后核对两机公钥; 不得重新生成或替换发布公钥.
+
+
+## 本地维护配置
+
+机器相关的维护设置统一使用仓库外 `~/.config/pir/maintenance/local.env`，初始化与缺失输入处理见维护技能的 `references/local-environment.md`。新 worktree 复用该配置，普通构建/测试不依赖发布配置。Project 状态同步和通知失败只保留待恢复状态；实际 issue 工作与验收按自身依赖继续，已验收完成的文档/网站/工具任务不创建空应用版本。

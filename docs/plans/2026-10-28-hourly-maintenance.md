@@ -2,7 +2,7 @@
 
 **Goal:** Give a new Pir chat one consistent hourly issue-to-release workflow, with resumable evidence and reusable local signing tools.
 
-**Scope:** One project skill with issue/PR/release templates; a small lease/checkpoint/comment helper; local Developer ID signing and isolated MacBook Sparkle preparation; public-release verification. Reuse existing checks/build/release scripts. No product changes or extra version release for this workflow-only change.
+**Scope:** One project skill with issue/PR/release templates; a small lease/checkpoint/comment helper; local Developer ID signing and isolated 更新签名主机 Sparkle preparation; public-release verification. Reuse existing checks/build/release scripts. No product changes or extra version release for this workflow-only change.
 
 1. Capture an offline baseline for crash recovery, stale CI and missing-key misdiagnosis.
 2. Add the canonical skill under `.agents/skills/pir-maintainer`, route it from AGENTS.md, and expose it to the local skill catalog.
