@@ -98,7 +98,7 @@ LogoBirthTests 支持通过 PIR_ARTWORK_SNAPSHOT_DIR 导出分阶段 PNG. 验收
 
 ## 官网 Shader
 
-website/artwork.js 使用 shaders 4.0.5 的 shaders/js 接口, 动态加载 WebGPU 渲染器. 一个 canvas 承担背景氛围, 产品演示、文案与操作入口为普通 HTML
+website/artwork.js 使用 shaders 4.0.5 的 shaders/js 接口, 动态加载 WebGPU 渲染器. 一个 canvas 承担背景氛围, 产品展示使用原生应用实拍截图, 文案与操作入口为普通 HTML
 
 | 层 | 当前作用 |
 | --- | --- |

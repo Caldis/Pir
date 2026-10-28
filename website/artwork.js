@@ -1,5 +1,5 @@
 import { t } from './i18n.js';
-// One canvas supplies the page's ambient light; the product demo remains ordinary HTML.
+// One canvas supplies ambient light behind the native product screenshots.
 export function createAmbientArtwork() {
   const panel = document.querySelector('.ambient-art');
   const canvas = panel.querySelector('canvas');
