@@ -8,7 +8,7 @@ After `cycle.py begin`, run once per cycle:
 python3 scripts/maintenance/notify.py --run-id "$PIR_RUN_ID" retry
 ```
 
-For each real transition, use a stable semantic `--fact`. Do not include run IDs, timestamps or hourly scan counters. Repeated issue comments do not justify replaying the same blocker. Receipt uses the issue number as its fact (one receipt per issue); changed actionable requirements can be a progress fact based on the new issue fingerprint. Later progress uses exact stage/source/evidence identity. Recovery uses the resolved blocker plus resumed stage; a materially new failure gets its own fact.
+For each real transition, use a stable semantic `--fact`. Do not include run IDs, timestamps or scan counters. Repeated issue comments do not justify replaying the same blocker. Receipt uses the issue number as its fact (one receipt per issue); changed actionable requirements can be a progress fact based on the new issue fingerprint. Later progress uses exact stage/source/evidence identity. Recovery uses the resolved blocker plus resumed stage; a materially new failure gets its own fact.
 
 ```bash
 python3 scripts/maintenance/notify.py --run-id "$PIR_RUN_ID" send \

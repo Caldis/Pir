@@ -45,6 +45,60 @@ class MaintenanceTests(unittest.TestCase):
         self.store.begin(now=103, ttl=120)
         self.assertEqual(self.store.read()['issues']['39']['phase'], 'merged')
 
+    def test_finish_records_terminal_result_and_time_without_schedule(self):
+        run = self.store.begin(now=100, ttl=120)
+        result = self.store.finish(run['id'], now=110, outcome='waiting',
+            note='CI pending', next_action='Read exact head CI', evidence=['ci.json'])
+        self.assertEqual(result['finishedAt'], 110)
+        self.assertEqual(result['outcome'], 'waiting')
+        self.assertEqual(result['nextAction'], 'Read exact head CI')
+        self.assertEqual(self.store.read()['lastRun'], result)
+        self.assertIsNone(self.store.read()['lease'])
+        journal = self.store.root / 'runs' / (run['id'] + '.json')
+        self.assertEqual(__import__('json').loads(journal.read_text()), result)
+        self.assertNotIn('frequency', result)
+
+    def test_invalid_finish_keeps_lease_and_cannot_claim_success(self):
+        run = self.store.begin(now=100, ttl=120)
+        with self.assertRaises(ValueError):
+            self.store.finish(run['id'], now=110, outcome='invented')
+        self.assertEqual(self.store.read()['lease']['id'], run['id'])
+        self.store.checkpoint(run['id'], 39, {'phase': 'implementing'}, now=111)
+        with self.assertRaises(ValueError):
+            self.store.finish(run['id'], now=112, outcome='idle')
+        self.assertEqual(self.store.read()['lease']['id'], run['id'])
+
+    def test_compact_summary_keeps_resume_facts_hides_old_bodies(self):
+        run = self.store.begin(now=100, ttl=120)
+        self.store.checkpoint(run['id'], 39, {'phase': 'blocked', 'pr': 40,
+            'worktree': '/tmp/worker', 'branch': 'codex/issue-39',
+            'nextAction': 'Read notary job', 'externalJob': 'apple-job-id',
+            'retryWhen': 'Keychain unlocked'}, now=101)
+        with self.store.transaction() as data:
+            data['notifications'] = {'sent': {'status': 'sent', 'event': {'detail': 'old verbose body'}}}
+        result = self.store.summary()
+        self.assertEqual(result['issues']['39']['worktree'], '/tmp/worker')
+        self.assertEqual(result['issues']['39']['externalJob'], 'apple-job-id')
+        self.assertNotIn('old verbose body', __import__('json').dumps(result))
+        self.assertEqual(result['notifications'], {'sent': 1})
+
+    def test_journal_failure_keeps_lease_and_previous_result(self):
+        run = self.store.begin(now=100, ttl=120)
+        with patch.object(self.m.os, 'replace', side_effect=OSError('simulated disk failure')):
+            with self.assertRaises(OSError):
+                self.store.finish(run['id'], now=110, outcome='failed')
+        self.assertEqual(self.store.read()['lease']['id'], run['id'])
+        self.assertNotIn('lastRun', self.store.read())
+
+    def test_finish_can_be_retried_after_unknown_local_outcome(self):
+        run = self.store.begin(now=100, ttl=120)
+        result = self.store.finish(run['id'], now=110, outcome='completed')
+        self.assertEqual(self.store.finish(run['id'], now=111, outcome='completed'), result)
+        new = self.store.begin(now=112, ttl=120)
+        with self.assertRaises(self.m.Busy):
+            self.store.finish(run['id'], now=113, outcome='completed')
+        self.assertEqual(self.store.read()['lease']['id'], new['id'])
+
     def test_own_comments_do_not_retrigger_but_reporter_edits_do(self):
         issue = {'number': 39, 'title': 'Resize', 'body': 'Wrong size', 'labels': []}
         comments = [{'body': 'Reproduction', 'user': {'login': 'reporter'}}]

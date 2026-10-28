@@ -10,6 +10,40 @@ final class PinSessionIntegrationTests: XCTestCase {
         _ = NSApplication.shared
     }
 
+    func testClipboardTrimOnlyAppliesToNewPinsWhileEditedWhitespaceSurvivesRestartAndPasteAgain() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let original = "  \nHeading\n\tIndented\n\nLast line\n  "
+        pasteboard.setString(original, forType: .string)
+        let changeCount = pasteboard.changeCount
+        let store = PinSessionStore(root: root)
+        let first = PinManager(store: store)
+        defer { first.closeAll() }
+        try first.show(ClipboardReader.read(from: pasteboard))
+        let panel = try XCTUnwrap(visiblePins().first)
+        let textView = try XCTUnwrap(descendant(NSTextView.self, in: try XCTUnwrap(panel.contentView)))
+        XCTAssertEqual(textView.string, "Heading\n\tIndented\n\nLast line")
+        XCTAssertEqual(pasteboard.string(forType: .string), original)
+        XCTAssertEqual(pasteboard.changeCount, changeCount)
+        let edited = "  \nEdited\n\tKeep these edges\n  "
+        textView.insertText(edited, replacementRange: NSRange(location: 0, length: (textView.string as NSString).length))
+        XCTAssertEqual(textView.string, edited)
+        first.flushSession()
+        first.closeAll()
+        let restored = PinManager(store: PinSessionStore(root: root))
+        defer { restored.closeAll() }
+        restored.restoreSession()
+        restored.flushSession()
+        let restoredPanel = try XCTUnwrap(visiblePins().first)
+        let restoredText = try XCTUnwrap(descendant(NSTextView.self, in: try XCTUnwrap(restoredPanel.contentView)))
+        XCTAssertEqual(restoredText.string, edited)
+        try restored.pasteAgain(try XCTUnwrap(restored.summaries.first?.id))
+        restored.flushSession()
+        XCTAssertEqual(try store.load().map(\.data), [Data(edited.utf8), Data(edited.utf8)])
+    }
+
     func testTextAndWindowFrameSurviveManagerRestart() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
