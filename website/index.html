@@ -30,19 +30,40 @@
         </div>
       </div>
       <figure class="usage-scene" aria-labelledby="usage-caption">
-        <div class="usage-workspace">
-          <img class="usage-image" src="./assets/usage-image.png" alt="Pir 中的图片贴屏" data-i18n-alt="usage.image" fetchpriority="high">
-          <img class="usage-text" src="./assets/usage-text.png" alt="Pir 中可编辑的文字贴屏" data-i18n-alt="usage.text">
-          <img class="usage-files" src="./assets/usage-files.png" alt="Pir 文件贴屏中的原生文件图标" data-i18n-alt="usage.files">
-        </div>
-        <figcaption id="usage-caption"><span data-i18n="usage.caption">Pir 实际使用截图 · 图片、文字与文件</span><button class="motion-toggle" id="motion-toggle" type="button" aria-label="暂停动态效果" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg></button></figcaption>
+        <fieldset class="usage-demo">
+          <legend data-i18n="usage.choose">看看可以贴些什么</legend>
+          <input class="usage-choice" id="example-image" type="radio" name="example" checked aria-controls="preview-image">
+          <label for="example-image" data-i18n="content.heading">图片</label>
+          <input class="usage-choice" id="example-text" type="radio" name="example" aria-controls="preview-text">
+          <label for="example-text" data-i18n="placement.heading">文字</label>
+          <input class="usage-choice" id="example-files" type="radio" name="example" aria-controls="preview-files">
+          <label for="example-files" data-i18n="shortcut.heading">文件</label>
+          <div class="usage-workspace">
+            <div class="usage-example" id="preview-image">
+              <div class="usage-preview"><img src="./assets/usage-image.png" width="397" height="291" alt="Pir 中的图片贴屏" data-i18n-alt="usage.image" fetchpriority="high"></div>
+              <h2 data-i18n="usage.image.title">参考图, 就在眼前.</h2>
+              <p data-i18n="usage.image.body">让灵感留在手边, 不用在窗口之间来回切换.</p>
+            </div>
+            <div class="usage-example" id="preview-text">
+              <div class="usage-preview"><img src="./assets/usage-text.png" width="387" height="257" alt="Pir 中可编辑的文字贴屏" data-i18n-alt="usage.text"></div>
+              <h2 data-i18n="usage.text.title">一段文字, 随手改.</h2>
+              <p data-i18n="usage.text.body">把待办或片段贴出来, 直接选择、编辑与复制.</p>
+            </div>
+            <div class="usage-example" id="preview-files">
+              <div class="usage-preview"><img src="./assets/usage-files.png" width="376" height="227" alt="Pir 文件贴屏中的原生文件图标" data-i18n-alt="usage.files"></div>
+              <h2 data-i18n="usage.files.title">这组文件, 随时取用.</h2>
+              <p data-i18n="usage.files.body">将手头的文件放在一起, 双击打开或拖到 Finder.</p>
+            </div>
+          </div>
+        </fieldset>
+        <figcaption id="usage-caption"><span data-i18n="usage.caption">Pir 原生窗口实拍</span><button class="motion-toggle" id="motion-toggle" type="button" aria-label="暂停动态效果" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg></button></figcaption>
       </figure>
     </section>
     <section class="getting-started wrap" aria-labelledby="start-title">
       <h2 id="start-title" data-i18n="start.heading">三步, 留在眼前.</h2>
       <ol class="steps">
         <li><h3 data-i18n="start.copy">复制内容</h3><p data-i18n="start.copy.body">复制一张图片、一段文字, 或 Finder 中的文件与文件夹.</p></li>
-        <li><h3 data-i18n="start.pin">按下 ⇧⌘V</h3><p data-i18n="start.pin.body">在任意应用中按下默认快捷键, 将剪贴板内容贴到屏幕. 也可以在偏好设置中自定义.</p></li>
+        <li><h3 data-i18n="start.pin">按下 [hotkey]</h3><p data-i18n="start.pin.body">在任意应用中按下你设置的快捷键, 将剪贴板内容贴到屏幕. 可在偏好设置中查看或修改.</p></li>
         <li><h3 data-i18n="start.arrange">摆到手边</h3><p data-i18n="start.arrange.body">拖动浮窗调整位置, 从边缘调整大小. 悬停后, 左上角会显示操作按钮.</p></li>
       </ol>
     </section>
