@@ -245,3 +245,17 @@ DMG SHA256 `648408d5283c9d73910ef7cf1a9512d64ed33fb0c379d15e04745e0eee422381`；
 证据位于 `dist/maintenance/abf4ed5e34eb4550a56c794fb9b37823/`，公开下载位于 `dist/public-verification/0.1.10/`，隔离升级应用和合成贴图位于 `~/.config/pir/maintenance/fixtures/abf4ed5e34eb4550a56c794fb9b37823/`。执行 worktree 的交接/日志已复制后归档，原剪贴板已恢复并移除临时私有快照；用户贴图未读取或覆盖。
 
 Limited Review: 可见桌面工具能将组合键输入录制控件，但未触发 Carbon 全局贴屏；新建文本、编辑、恢复和再次贴上的应用交互由真实 NSPasteboard/NSPanel/NSTextView 集成回归覆盖。真实 Sparkle 升级通过可见界面完成；本轮未逐一重做图片/文件鼠标手势，已有回归通过。网站构建保留既有 Vite bundle-size advisory。
+
+
+## 0.1.11 发行验收
+
+2026-10-29 完成正式发行，版本 0.1.11，构建号 20261029.1。PR #45 当前 head `ddf3cae52347b77aaf584196e87458a5071d4e06` 经独立审查及 [Check 40806362487](https://github.com/Caldis/Pir/actions/runs/40806362487)；合并/构建源码 `47c358763fc9a44cef3668a7b0b36180cf89763b`，tag `0.1.11` 指向 `08db745f6b115400b69ada203104491914d6c518`，仅有已签名 feed 元数据差异。
+
+- #42：Cloudflare 官方 cf CLI 配置唯一 DNS-only CNAME `pir.caldis.me → caldis.github.io`，现有 GitHub Pages 绑定该域名，HTTPS 证书 approved 并开启强制 HTTPS；主页及资源 HTTPS 200、HTTP 跳转通过。应用关于页及双语 README 官网入口一致，GitHub 更新/下载源保留。
+- 检查：130 Swift、143 Python、本地化与网站检查通过，技能校验和独立审查通过；Universal app 最低 macOS 13，SDK 26.5。
+- 应用公证 Apple Accepted `3293a3c9-7ebb-4710-a473-8b00676515b6`；DMG 公证 Apple Accepted `a1097294-9447-4270-8ea1-0499fe72b186`；既有 Developer ID 签名、票据、Gatekeeper 通过。原 Pir Sparkle 密钥签名 ZIP/feed，独立验签通过。
+- [公开 0.1.11](https://github.com/Caldis/Pir/releases/tag/0.1.11) 的 DMG、ZIP、SHA256SUMS 与 update-feed 回读通过，`verify-public.py --version 0.1.11 --build 20261029.1 --compare-feed` exit 0。DMG SHA256 `5a742d20dbf5732118df023f1e7114f87d0235e27a39554b004a2d2cc82a7341`；ZIP SHA256 `2872fed29d784a4190ae203eb3440b46a985c32b906a3ba54e11d793cc719c71`。
+- 真实 Sparkle：隔离目录内公开 0.1.10 / 20261028.2 检查、下载、安装并重启至 0.1.11 / 20261029.1；再次检查显示最新版。安装后 118 个常规文件与公开签名 ZIP 一致，严格验签、票据及 Gatekeeper 通过。升级后的应用“主页”按钮实际打开安全的 `https://pir.caldis.me/`。
+- 恢复经验：本机 DNS 受代理接管时，普通 dig 不能证明外部解析；本次用外部 DoH 核验实际 DNS。证书一直未创建时，按 [GitHub 官方恢复流程](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https) 重新绑定一次自定义域名，证书随即获批。重试前先回读，不重复构建或分配版本。
+
+证据：`dist/maintenance/1bb6f06e8f10469ab86f1bd109cdd966/` 保留构建、公证及准备事实；`dist/maintenance/9cd4aee7654745e48ec22bfbe806e674/` 保留公开验证、真实升级与官网截图。交互范围覆盖本次官网入口和实际升级，未重复执行无关的图片/文件手势验收；现有回归均通过。
