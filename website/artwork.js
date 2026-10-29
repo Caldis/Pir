@@ -1,20 +1,17 @@
-import { t } from './i18n.js';
-// One canvas supplies ambient light behind the native product screenshots.
+// One canvas supplies ambient light behind the interactive windows.
 export function createAmbientArtwork() {
   const panel = document.querySelector('.ambient-art');
   const canvas = panel.querySelector('canvas');
-  const button = document.querySelector('#motion-toggle');
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const connection = navigator.connection;
   let shader;
   let loading = false;
   let failed = false;
   let visible = false;
-  let paused = false;
   let suspended = false;
   let disposed = false;
 
-  const canPlay = () => !disposed && !suspended && !document.hidden && visible && !paused && !motion.matches && !connection?.saveData;
+  const canPlay = () => !disposed && !suspended && !document.hidden && visible && !motion.matches && !connection?.saveData;
 
   function resize() {
     if (!shader || disposed) return;
@@ -82,12 +79,6 @@ export function createAmbientArtwork() {
     shader?.[canPlay() ? 'resume' : 'pause']();
     const staticMode = motion.matches || Boolean(connection?.saveData) || !navigator.gpu || failed;
     panel.classList.toggle('static-art', staticMode);
-    button.disabled = staticMode;
-    button.setAttribute('aria-pressed', String(paused));
-    button.setAttribute('aria-label', t(staticMode ? 'motion.static' : paused ? 'motion.play' : 'motion.pause'));
-    button.innerHTML = paused
-      ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5 3 7 5-7 5Z"/></svg>'
-      : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg>';
     start();
   }
 
@@ -102,7 +93,6 @@ export function createAmbientArtwork() {
   document.addEventListener('pir-languagechange', update);
   motion.addEventListener('change', update);
   connection?.addEventListener('change', update);
-  button.addEventListener('click', () => { paused = !paused; update(); });
   window.addEventListener('pagehide', (event) => {
     suspended = true;
     shader?.pause();
@@ -112,6 +102,7 @@ export function createAmbientArtwork() {
     visibility.disconnect();
     size.disconnect();
     document.removeEventListener('visibilitychange', update);
+    document.removeEventListener('pir-languagechange', update);
     motion.removeEventListener('change', update);
     connection?.removeEventListener('change', update);
   });

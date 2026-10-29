@@ -12,12 +12,31 @@ The scheduler decides when to wake this chat. Do not put cadence expectations, s
 
 When waiting a long time for CI/notarization, persist the job and next action and yield only at a safe boundary. Do not release the lease while a worker or signing command can still mutate the repository/keychain; stop or finish that owned work first. Next activation reacquires and reads back the job result. Short bounded waits can finish in the same activation.
 
+## Per-task resource ownership and cleanup
+
+Subagents may perform delegated app/browser validation. The coordinator schedules conflicting UI actions on the same desktop serially; independent implementation, tests and review continue in parallel. A repository lease does not establish ownership of another chat's desktop session.
+
+Every delegated task must include the following cleanup contract:
+
+- Record resources when created: task/agent ID, resource type and exact handle/tab/session/PID or port, ownership (task-owned or shared), cleanup method and evidence path. Persist the record outside the worktree under `dist/maintenance/<run-id>/` so interruption recovery can find it. Do not record credentials or browser user content.
+- Before returning success, failure or cancellation, close task-created temporary browser tabs, restore viewport overrides, stop task-owned preview/test processes and release the task's Computer Use context through supported tools. Use `finally` where possible. Save necessary screenshots/logs first. Preserve user apps/tabs and shared services; only deliberately handed-off resources remain open, with a named next owner and next action.
+- Return a structured `cleanup` handoff with `status: verified|pending|not-used`, resource IDs, actions, readback evidence and any remaining owner. A context reset alone proves only that the context was reset; it does not prove that the app-wide control service or cursor overlay exited. An unobserved cursor state is `unverified`, not a successful visual check.
+- The coordinator actively checks worker status and registered resource ownership while orchestrating, including bounded waits, task handoff and cycle closeout; do not rely solely on workers to volunteer cleanup. Use agent status/completion events and real task/process state. Missing output or CPU idleness alone does not prove inactivity: a live build, CI wait, approval or system dialog retains its recorded owner.
+- The coordinator verifies cleanup before marking the stage complete, archiving its worktree or assigning the same desktop to another worker. Read back process/port exit and tab closure through the appropriate supported interface. When completion, cancellation, failure or confirmed abandonment leaves resources without an active owner, the coordinator performs task-owned cleanup or sends a bounded cleanup-only task. A worker's final text is not sufficient readback by itself. Record genuinely continuing services with their actual owner; all workers ending does not make a shared platform service task-owned.
+- If cleanup fails, record `pending` with the exact resource, completed actions and next recovery step; retain task results. Defer only conflicting UI work and continue independent work. Do not create a new control context to mask the old one, repeat the business task, or start a cleanup retry loop.
+- A persistent cursor requires separate recovery. Use a supported release operation if available. Do not invent APIs or claim tab closure, context reset, lease release or worktree archival removed the cursor. App-wide service termination requires verified executable/PID, no other active owner and authorization for that shared-service recovery; use bounded normal termination and read back exit/restart. Never broadly kill app/helper processes or routinely terminate a shared service after every subtask.
+
+This supervisor is part of the active coordinator's orchestration, not a new background daemon or recurring automation. During bounded waits, recheck workers/resources at the next status boundary. Before the coordinator yields, recover abandoned resources and record remaining ownership explicitly. An ended/suspended model turn cannot promise continuous polling; the next activation reconciles durable records before new UI work. Preserve the scheduler configuration.
+
+Offline recovery cases to check when changing this contract: successful worker with a preview and test tabs; failed/interrupted worker with a durable resource record; another chat owning the shared control service; persistent cursor after context reset. Expected outcomes are verified cleanup or explicit pending ownership, no simultaneous conflicting desktop actions, and no lost/replayed implementation or release work. A real UI run must separately supply actual resource-release evidence; source review cannot establish visual cursor disappearance.
+
 ## Mandatory closeout
 
 Before yielding, even on caught failure:
 
 - Save the real issue checkpoint or proactive-task plan/PR evidence. Release stages never reset merely because an activation ends. Record a blocker and observable retry prerequisite when needed.
 - Confirm owned workers/processes ended or were safely stopped. Keep unfinished branches, signed assets, public verification downloads and unknown delivery records. Copy needed worker evidence to a durable location outside any worktree before archiving it with the app's managed-worktree tool. Never delete the main checkout or user pin contents.
+- Reconcile every delegated task's cleanup record above. Record verified results and pending shared/UI resources separately; do not initialize Computer Use on an otherwise CLI-only cycle just to manufacture a cleanup check.
 - Send only real milestone/novel-fault notifications via the deduplicated helper. Notification failure does not replay the business action. Idle scans have no commentary or routine completion message.
 - Run the following with the actual result; wrap scripted stages in `try/finally` or a trap where appropriate. A hard crash cannot be guaranteed to clean up: TTL/recovery and signing recovery records remain required.
 
