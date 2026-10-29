@@ -7,7 +7,7 @@
 <p align="center">Copy it. Keep it in sight.</p>
 
 <p align="center">
-  <a href="https://caldis.github.io/Pir/">Website</a> ·
+  <a href="https://pir.caldis.me/">Website</a> ·
   <a href="https://github.com/Caldis/Pir/releases/latest">Download</a>
 </p>
 

@@ -84,7 +84,7 @@ final class AboutPreferencesController: PreferencesPageController {
     @objc private func openDestination(_ sender: NSButton) {
         let destination: String
         switch sender.tag {
-        case 0: destination = "https://caldis.github.io/Pir/"
+        case 0: destination = "https://pir.caldis.me/"
         case 1: destination = "https://github.com/Caldis/Pir"
         case 2: model.onShowOnboarding?(); return
         case 3: destination = "https://github.com/Caldis/Pir/blob/main/LICENSE"
