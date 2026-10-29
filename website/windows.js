@@ -1,4 +1,5 @@
 import { t } from './i18n.js';
+import { createPointerOwner } from './window-pointer.js';
 import { clampFrame, isDemoShortcut, nextDemoSlot, canDrift } from './windows-geometry.js';
 const art = [new URL('./assets/editorial/observatory.jpg', import.meta.url).href, new URL('./assets/editorial/sea.jpg', import.meta.url).href];
 const paths = {close:'M5 5l10 10M15 5 5 15',reset:'M5 8a6 6 0 1 1-1 5M5 3v5h5',fit:'M3 7V3h4m6 0h4v4m0 6v4h-4m-6 0H3v-4',copy:'M7 7h10v10H7zM3 12V3h9',resize:'m8 17 9-9m-4 9 4-4',check:'m4 10 4 4 8-9'};
@@ -12,7 +13,10 @@ export function createWindowDemo() {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const events = new AbortController();
   const windows = [];
-  let interacted=false, suspended=false, disposed=false, count=0, z=5, gesture, drift, lastHeight=innerHeight;
+  const pointer = createPointerOwner(() => {
+    for (const item of windows) item.element.classList.remove('is-manipulating');
+  });
+  let interacted=false, suspended=false, disposed=false, count=0, z=5, drift, lastHeight=innerHeight;
   const bounds = viewport => ({width:document.documentElement.clientWidth,height:viewport ? innerHeight : document.documentElement.scrollHeight,top:viewport ? scrollY : 0});
   function paint(item, frame=item.frame) {
     item.frame=frame;
@@ -60,21 +64,24 @@ export function createWindowDemo() {
     if(type==='files') {const files=document.createElement('div');files.className='demo-files';files.innerHTML=`<div><svg class="file-folder" viewBox="0 0 64 56" aria-hidden="true"><path d="M4 12a4 4 0 0 1 4-4h18l6 7h24a4 4 0 0 1 4 4v29H4Z"/><path d="M4 19h56"/></svg><span>Field notes</span></div><div><svg class="file-page" viewBox="0 0 48 56" aria-hidden="true"><path d="M7 3h23l11 11v39H7Z"/><path d="M30 3v12h11M14 27h20M14 33h20M14 39h13"/></svg><span>Read me.txt</span></div><div><img src="${art[1]}" alt=""><span>Blue hour.jpg</span></div>`;element.append(files);}
     const resize=document.createElement('button');resize.className='window-resize';resize.type='button';resize.innerHTML=icon('resize');resize.title=t('demo.resize');resize.setAttribute('aria-label',t('demo.resize'));element.append(resize);
     element.addEventListener('pointerdown',event=>{
+      if(pointer.active)return;
       stopDrift();focus(item);
       const resizing=event.target.closest('.window-resize');
       if(!resizing && event.target.closest('button,[contenteditable]'))return;
       if(event.button!==0)return;
-      event.preventDefault();element.focus({preventScroll:true});element.setPointerCapture(event.pointerId);
-      item.touched=true;gesture={item,id:event.pointerId,x:event.clientX,y:event.clientY,start:{...item.frame},scroll:scrollY,resizing};element.classList.add('is-manipulating');
+      event.preventDefault();element.focus({preventScroll:true});
+      if(!pointer.begin({item,id:event.pointerId,x:event.clientX,y:event.clientY,start:{...item.frame},scroll:scrollY,resizing}))return;
+      item.touched=true;element.classList.add('is-manipulating');
     },{signal:events.signal});
     element.addEventListener('pointermove',event=>{
-      if(!gesture||gesture.item!==item)return;
+      if(!pointer.matches(item,event.pointerId))return;
+      const gesture=pointer.active;
       const dx=event.clientX-gesture.x,dy=event.clientY-gesture.y+scrollY-gesture.scroll;
       if(!gesture.resizing && (event.clientY>innerHeight-32||event.clientY<32))window.scrollBy(0,event.clientY<32?-12:12);
       const frame=gesture.resizing?{...gesture.start,width:gesture.start.width+dx,height:gesture.start.height+dy}:{...gesture.start,x:gesture.start.x+dx,y:gesture.start.y+dy};
       paint(item,clampFrame(frame,bounds(true)));
     },{signal:events.signal});
-    const end=()=>{element.classList.remove('is-manipulating');gesture=undefined;};
+    const end=event=>pointer.end(item,event.pointerId);
     for(const name of ['pointerup','pointercancel','lostpointercapture'])element.addEventListener(name,end,{signal:events.signal});
     element.addEventListener('keydown',event=>{
       if(event.target.closest('[contenteditable]')||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;
@@ -99,10 +106,10 @@ export function createWindowDemo() {
   window.addEventListener('scroll',stopDrift,{once:true,passive:true,signal:events.signal});
   document.addEventListener('visibilitychange',updateDrift,{signal:events.signal});
   motion.addEventListener('change',updateDrift,{signal:events.signal});
-  window.addEventListener('resize',()=>{gesture=undefined;const visible=new Set(windows.filter(item=>item.touched && item.frame.y+item.frame.height>scrollY && item.frame.y<scrollY+lastHeight));arrange();for(const item of windows)paint(item,clampFrame(item.frame,bounds(visible.has(item))));lastHeight=innerHeight;},{signal:events.signal});
+  window.addEventListener('resize',()=>{pointer.cancel();const visible=new Set(windows.filter(item=>item.touched && item.frame.y+item.frame.height>scrollY && item.frame.y<scrollY+lastHeight));arrange();for(const item of windows)paint(item,clampFrame(item.frame,bounds(visible.has(item))));lastHeight=innerHeight;},{signal:events.signal});
   document.addEventListener('pir-languagechange',()=>{for(const item of windows){if(item.type==='text'){item.content.setAttribute('aria-label',t('demo.text'));if(!item.edited)item.content.innerText=t('demo.note');}if(item.type==='image')item.content.alt=t(item.content.src===art[0]?'demo.observatory':'demo.sea');item.element.querySelector('.window-drag').title=t('demo.move');item.element.querySelector('.window-resize').title=t('demo.resize');item.element.setAttribute('aria-label',t(`demo.${item.type}`));for(const button of item.element.querySelectorAll('[data-action]')){button.title=t(`demo.${button.dataset.action}`);button.setAttribute('aria-label',button.title);}item.element.querySelector('.window-resize').setAttribute('aria-label',t('demo.resize'));}},{signal:events.signal});
-  window.addEventListener('blur',()=>{gesture=undefined;for(const item of windows)item.element.classList.remove('is-manipulating');},{signal:events.signal});
-  window.addEventListener('pagehide',event=>{suspended=true;updateDrift();if(!event.persisted){disposed=true;events.abort();for(const item of windows)clearTimeout(item.timer);}},{signal:events.signal});
+  window.addEventListener('blur',()=>pointer.cancel(),{signal:events.signal});
+  window.addEventListener('pagehide',event=>{pointer.cancel();suspended=true;updateDrift();if(!event.persisted){disposed=true;events.abort();for(const item of windows)clearTimeout(item.timer);}},{signal:events.signal});
   window.addEventListener('pageshow',()=>{suspended=false;updateDrift();},{signal:events.signal});
   updateDrift();
 }
