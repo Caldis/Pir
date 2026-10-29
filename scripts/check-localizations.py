@@ -17,6 +17,13 @@ for locale in ['en', 'zh-Hans']:
     assert not duplicates, f'{locale}: duplicate keys: {duplicates}'
     assert all(value.strip() for value in translations[locale].values()), f'{locale}: empty translation'
 assert translations['en'].keys() == translations['zh-Hans'].keys(), 'English and Chinese keys differ'
+# Lookup keys retain internal Pin terminology; only displayed values use window names.
+assert translations['en']['Pins'] == 'Windows', 'English window tab must be Windows'
+assert translations['zh-Hans']['Pins'] == '浮窗', 'Chinese window tab must be 浮窗'
+for key, value in translations['en'].items():
+    assert not re.search(r'\bpins\b|\b(?:a|the|each|close|show|hide|delete|text|file) pin\b', value, re.IGNORECASE), f'English: legacy window noun in {key}: {value}'
+for key, value in translations['zh-Hans'].items():
+    assert not any(term in value for term in ['贴屏', '贴图']), f'Chinese: legacy window noun in {key}: {value}'
 for path in (root / 'Sources/Pir').rglob('*.swift'):
     for key in re.findall(r'L\(\s*("(?:[^"\\]|\\.)*")', path.read_text()):
         value = json.loads(key)
