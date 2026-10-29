@@ -7,7 +7,7 @@
 <p align="center">复制一下. 贴在屏幕上.</p>
 
 <p align="center">
-  <a href="https://caldis.github.io/Pir/">官网</a> ·
+  <a href="https://pir.caldis.me/">官网</a> ·
   <a href="https://github.com/Caldis/Pir/releases/latest">下载</a>
 </p>
 

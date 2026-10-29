@@ -17,7 +17,7 @@ For optional verified event intake when its private configuration already exists
 
 ## GitHub identity
 
-Repository, issue, PR and release mutations use only native `pir-maintainer[bot]`. The owner explicitly authorizes **Caldis main-account authentication for Project #7 reads and synchronization**. Read [references/github-identity.md](references/github-identity.md): use the App runner for repository operations and the separate owner Project runner for board operations. Never change global gh authentication or use owner credentials for repository writes. A Project failure is a pending synchronization/source blocker, not a reason to stop independent issue implementation or release.
+Use native `pir-maintainer[bot]` for Codex-authored issue replies, especially on issues opened by Caldis, so the conversation does not appear as the owner replying to themselves. This is an attribution preference, not an account or permissions boundary. Other authorized operations may use the existing Caldis account or App identity as appropriate; do not block Pages/domain configuration, Project synchronization, Git, PR, release or repository operations solely because the App lacks permission. Read [references/github-identity.md](references/github-identity.md) for the existing runners, comment ownership and credential handling. Keep the actual task scope, lease, review and release checks.
 
 ## Execution and handoff
 
