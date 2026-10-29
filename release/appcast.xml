@@ -7,6 +7,15 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <description>Pir Updates</description>
     <language>en</language>
     <item>
+      <title>Pir 0.1.11</title>
+      <sparkle:version>20261029.1</sparkle:version>
+      <sparkle:shortVersionString>0.1.11</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+      <pubDate>Thu, 29 Oct 2026 02:33:04 +0000</pubDate>
+      <description>&lt;h2&gt;中文&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;应用内官网入口更新为 pir.caldis.me。&lt;/li&gt;&lt;/ul&gt;&lt;h2&gt;English&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;Updated the in-app website link to pir.caldis.me.&lt;/li&gt;&lt;/ul&gt;</description>
+      <enclosure url="https://github.com/Caldis/Pir/releases/download/0.1.11/Pir.Versions.0.1.11-20261029.1.zip" length="6737847" type="application/octet-stream" sparkle:edSignature="SQqQnA+m8Lrfc5XEVNnwyed/ZJl/kOD/JPs20Zbj0H8q+8lyvf+o6FdQdmp1YCBTqKp0WpQqVgyRfYTAJKolBw=="></enclosure>
+    </item>
+    <item>
       <title>Pir 0.1.10</title>
       <sparkle:version>20261028.2</sparkle:version>
       <sparkle:shortVersionString>0.1.10</sparkle:shortVersionString>
@@ -153,6 +162,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Us4rMDYyJgHYywAuNDqu/wxB4LTrupL2gJmCXOAwNAvXdpEBnM/ocg/TY01WUKY+06qOrJKWZR/gpBtJl0NIAA==
-length: 11573
+edSignature: GejFlObukdZhx8dgUJ5pkrDbNA8UzyMOc64re1Zp+gj+IBA2KydjNdGW7yxfjjjzlaDQ3p+dTqHacMkwe2rMCA==
+length: 12427
 -->
