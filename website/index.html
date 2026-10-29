@@ -17,7 +17,7 @@
   <a class="skip-link" href="#main" data-i18n="skip">跳到正文</a>
   <header class="header wrap">
     <a class="brand" href="./" aria-label="Pir 首页" data-i18n-aria-label="home"><img src="./assets/app-icon.png" width="44" height="44" alt=""><span>Pir</span></a>
-    <nav aria-label="主导航" data-i18n-aria-label="nav"><a href="#details" data-i18n="features">功能</a><a href="https://github.com/Caldis/Pir" target="_blank" rel="noreferrer">GitHub <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></a><button id="language-toggle" type="button" aria-label="Switch language">EN</button></nav>
+    <nav aria-label="主导航" data-i18n-aria-label="nav"><a href="https://github.com/Caldis/Pir" target="_blank" rel="noreferrer"><span>GitHub</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 12 4M4 4h8v8"/></svg></a><button id="language-toggle" type="button" aria-label="Switch language">EN</button></nav>
   </header>
   <main id="main">
     <section class="hero wrap" aria-labelledby="hero-title">
@@ -30,9 +30,11 @@
         </div>
       </div>
       <figure class="usage-scene" aria-labelledby="usage-caption">
-        <img class="usage-image" src="./assets/usage-image.png" alt="Pir 中的图片贴屏" data-i18n-alt="usage.image" fetchpriority="high">
-        <img class="usage-text" src="./assets/usage-text.png" alt="Pir 中可编辑的文字贴屏" data-i18n-alt="usage.text">
-        <img class="usage-files" src="./assets/usage-files.png" alt="Pir 文件贴屏中的原生文件图标" data-i18n-alt="usage.files">
+        <div class="usage-workspace">
+          <img class="usage-image" src="./assets/usage-image.png" alt="Pir 中的图片贴屏" data-i18n-alt="usage.image" fetchpriority="high">
+          <img class="usage-text" src="./assets/usage-text.png" alt="Pir 中可编辑的文字贴屏" data-i18n-alt="usage.text">
+          <img class="usage-files" src="./assets/usage-files.png" alt="Pir 文件贴屏中的原生文件图标" data-i18n-alt="usage.files">
+        </div>
         <figcaption id="usage-caption"><span data-i18n="usage.caption">Pir 实际使用截图 · 图片、文字与文件</span><button class="motion-toggle" id="motion-toggle" type="button" aria-label="暂停动态效果" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10"/></svg></button></figcaption>
       </figure>
     </section>

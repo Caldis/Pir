@@ -1,0 +1,18 @@
+# Homepage presentation implementation plan
+
+**Goal:** Resolve issue46 navigation alignment, remove Features shortcut, restructure Hero and replace the ambient shader using the existing shaders library.
+
+**Design:** Retain real Pir image/text/file screenshots and clear download/copy. Use a calm floating workspace composition with deliberate scale and spacing, rather than the current oversized image plus overlapping lower cards. Navigation GitHub/link icon and language switch share centered alignment. Replace Swirl/FlutedGlass with low-contrast MeshGradient light, using cyan/lavender against dark ink; CSS fallback must match the new style. Keep existing renderer lifecycle, reduced motion/saveData/pause and GPU budget. No new image generation, account, framework or dependency upgrade.
+
+**Alternatives considered:** Equal card grid loses the floating-window identity; heavy device frame adds unrelated chrome. Selected balanced floating workspace preserves the native app product evidence.
+
+**Implementation:** Read website/index.html/style.css/artwork.js/i18n.js and installed shaders core definitions. Install locked website dependencies. Apply bounded website-only changes and update docs/design.md current shader notes. Preserve bilingual content, downloads, screenshot alt text and browser lifecycle. Do not modify application/release/version files.
+
+**Validation:** Production website/static and localization checks plus scripts/check.sh. Inspect real browser at desktop/tablet/390px and both languages; nav alignment/no Features link, screenshot visibility, no overflow, readable copy. Verify WebGPU shader actual initialization and fallback/reduced-motion, pause/resume. Independent read-only review, current PR-head CI, merge, Pages deployment and public HTTPS/readback before bot completion/issue close/Project Done. Application release not required.
+
+
+**Implementation evidence (2026-10-29):** Header GitHub text/icon and language control use centered flex alignment with a shared 32 px height; the Features anchor was removed. Hero uses a natural-height, non-overlapping two-column workspace: image at left, text and files at right, with a separate caption row. MeshGradient and static radial gradients share a muted ink/cyan/lavender palette; FilmGrain strength is reduced to .035. Existing renderer lifecycle, motion/data preferences, GPU size limits and telemetry setting remain in place. Existing real product screenshots, bilingual copy and download links are preserved.
+
+**Local verification:** `npm ci` (locked dependencies), `npm run build --prefix website`, `python3 scripts/check-website.py`, `python3 scripts/check-localizations.py`, `node --check website/artwork.js` and `git diff --check` passed. `scripts/check.sh` exited 0: 130 Swift/UI test invocations, 143 ReleaseTools tests, 113 native and 39 website localization keys, production build, site path/release-link validation and script syntax checks. Logs: `/tmp/pir-issue46-npm-ci.log`, `/tmp/pir-issue46-website-build.log`, `/tmp/pir-issue46-check.log`. The unchanged locked dependency tree reports one high-severity npm advisory and the shaders bundle retains Vite's chunk-size warning; dependency changes are outside this website presentation task.
+
+**Review limits:** Browser visual/layout and actual WebGPU/fallback/lifecycle evidence are collected by the coordinating maintenance chat against the preview at `http://127.0.0.1:4176/`. Source/build checks alone do not verify rendering. Independent review, PR CI, merge and public Pages readback remain coordinator steps. This website-only change does not require an application release.
