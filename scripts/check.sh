@@ -4,6 +4,7 @@ PIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PIR_ROOT"
 "$PIR_ROOT/scripts/swift.sh" test --jobs 2 --parallel --num-workers 2
 python3 scripts/check-localizations.py
+npm test --prefix website
 npm run build --prefix website
 node --check website/main.js
 node --check website/artwork.js

@@ -1,6 +1,9 @@
+import { createWindowDemo } from './windows.js';
+import './i18n.js';
 import { createAmbientArtwork } from './artwork.js';
 const releasePage = 'https://github.com/Caldis/Pir/releases/latest';
 createAmbientArtwork();
+createWindowDemo();
 
 async function resolveDownload() {
   const controller = new AbortController();
