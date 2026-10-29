@@ -35,24 +35,18 @@ export function createAmbientArtwork() {
       if (!canPlay()) return;
       shader = await createShader(canvas, {
         components: [
-          { type: 'Swirl', id: 'fluid', props: {
+          { type: 'MeshGradient', id: 'light', props: {
             stops: [
-              { color: '#080b19', position: 0 },
-              { color: '#293ba1', position: .24 },
-              { color: '#a8a2f5', position: .45 },
-              { color: '#75d9e2', position: .58 },
-              { color: '#43338c', position: .73 },
-              { color: '#e2a4b3', position: .88 },
-              { color: '#131227', position: 1 },
-            ], speed: .13, detail: 1.35, blend: 48, colorSpace: 'oklch',
+              { color: '#0c1420', position: 0 },
+              { color: '#42616d', position: .32 },
+              { color: '#8b9fb1', position: .56 },
+              { color: '#807799', position: .78 },
+              { color: '#141525', position: 1 },
+            ], count: 5, smoothness: 2.8, variation: .18,
+            swirl: .08, drift: .22, wrapping: 0, speed: .12,
+            seed: 14, colorSpace: 'oklab',
           } },
-          { type: 'FlutedGlass', id: 'refraction', props: {
-            shape: 'waves', angle: -32, frequency: 3.2, softness: .8,
-            waveAmplitude: .15, waveFrequency: 1.1, speed: .035,
-            refraction: .65, aberration: .12, highlight: .16,
-            highlightSoftness: .65, highlightColor: '#c7e9ff', edges: 'mirror',
-          } },
-          { type: 'FilmGrain', id: 'grain', props: { strength: .075, bias: 1.1, animated: false } },
+          { type: 'FilmGrain', id: 'grain', props: { strength: .035, bias: 1.1, animated: false } },
         ],
       }, {
         disableTelemetry: true,
