@@ -259,3 +259,19 @@ Limited Review: 可见桌面工具能将组合键输入录制控件，但未触�
 - 恢复经验：本机 DNS 受代理接管时，普通 dig 不能证明外部解析；本次用外部 DoH 核验实际 DNS。证书一直未创建时，按 [GitHub 官方恢复流程](https://docs.github.com/en/pages/getting-started-with-github-pages/securing-your-github-pages-site-with-https) 重新绑定一次自定义域名，证书随即获批。重试前先回读，不重复构建或分配版本。
 
 证据：`dist/maintenance/1bb6f06e8f10469ab86f1bd109cdd966/` 保留构建、公证及准备事实；`dist/maintenance/9cd4aee7654745e48ec22bfbe806e674/` 保留公开验证、真实升级与官网截图。交互范围覆盖本次官网入口和实际升级，未重复执行无关的图片/文件手势验收；现有回归均通过。
+
+
+## 0.1.12 发行验收
+
+2026-10-30 完成发行，版本 0.1.12，构建号 20261030.1。PR #51 当前 head `042c57b731663f9b695f6ef8aba9c60480525811` 经过独立审查与 [Check 40918331586](https://github.com/Caldis/Pir/actions/runs/40918331586)；合并/构建源码为 `5572959a6508a83556e9b5dbfb4c6ffc30405cbb`。tag `0.1.12` 为 `88074437dd0e48d8d75b09d9be8d634f09f25084`，仅增加签名 feed 元数据，其 [Check 41054591088](https://github.com/Caldis/Pir/actions/runs/41054591088) 通过。
+
+- 应用统一使用「浮窗 / Windows」，内部 lookup key 与持久化标识保持不变。113 组原生双语键、130 Swift、143 Python 发布工具测试、7 项网页交互回归及网站检查通过；中英文偏好页完成隔离应用交互验收。
+- 官网使用 HTML/CSS 三种浮窗，支持轻微飘动、整页拖动、边界约束、缩放和快捷键演示；原创编辑插画、键帽、文案及双 CTA 完成。四种宽度与实际拖动/缩放交互验收通过；[Pages 40919015303](https://github.com/Caldis/Pir/actions/runs/40919015303) 部署成功，8 个公开文件 SHA256 与构建一致。
+- 既有 Developer ID 签名；应用公证 Accepted `b398614a-1efc-4180-9113-c1ef3c4cc593`，DMG 公证 Accepted `269280dc-ab5f-42ac-bbab-620e0afb76ba`。票据、Gatekeeper、磁盘镜像校验通过，临时钥匙串清理并恢复搜索列表。
+- 原 Pir Sparkle 公钥核对一致，ZIP/feed 使用原密钥签名并独立验签。[0.1.12](https://github.com/Caldis/Pir/releases/tag/0.1.12) 的三项资产哈希回读一致；update-feed 保持 prerelease。`verify-public.py --version 0.1.12 --build 20261030.1 --compare-feed` exit 0，ZIP 与只读 DMG 内应用的签名、票据与 Gatekeeper 验证通过。
+- 隔离公开 0.1.11 / 20261029.1 经 Sparkle 发现、下载、安装并重启至 0.1.12 / 20261030.1，再次检查显示最新版；安装后的 118 个常规文件与公开签名 ZIP 完全一致。用户原应用及内容保留，测试应用已退出。
+- DMG SHA256 `da2496a82cfbbef1b4f71501989bade145474563f10059388eda45c6b48e4040`；ZIP SHA256 `745ff23c24355939802058aa8fc0b9cd1e8a68b030fc954b0b5a4e316caaf440`。
+
+证据位于 `dist/maintenance/a84bc8e0d9fc45278f5660efed3591bf/` 与 `dist/maintenance/725de2fdf53a43b599d8cd1cc00cd123/`；公开资产位于 `dist/public-verification/0.1.12/`。签名主机连接恢复后复用既有公证产物，未重复分配版本或构建。测试窗口、预览、控制上下文均已收尾；持久控制服务另行核对归属后回收。
+
+Limited Review: 本轮应用只改术语，未重做无关图片/文件手势；会话逻辑未改。浏览器实际组合键被工具的虚拟粘贴入口拦截，快捷键条件由回归测试、等效演示按钮和键盘激活验证；系统减少动态效果未切换，相关生命周期由源代码与回归覆盖。
